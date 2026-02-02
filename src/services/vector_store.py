@@ -8,7 +8,7 @@ import httpx
 from qdrant_client import QdrantClient, models as qdrant_models
 from qdrant_client.http.exceptions import UnexpectedResponse
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import (
     VectorStoreError,
     CollectionNotFoundError,
@@ -73,14 +73,14 @@ class VectorStore:
             # Test connection
             self.client.get_collections()
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Qdrant client initialized",
                 url=self.url,
                 timeout=self.timeout
             )
             
         except Exception as e:
-            logger.error("Failed to connect to Qdrant", error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to connect to Qdrant", error=str(e))
             raise VectorStoreConnectionError(
                 f"Failed to connect to Qdrant: {str(e)}",
                 details={"url": self.url, "error": str(e)}
@@ -133,7 +133,7 @@ class VectorStore:
                 )
             )
             
-            logger.info(
+            logger.bind(tag=LogTag.COLLECTION.value).info(
                 "Collection created successfully",
                 collection=collection_name,
                 dimension=dimension,
@@ -142,7 +142,7 @@ class VectorStore:
             
         except UnexpectedResponse as e:
             if e.status_code == 400:
-                logger.warning(
+                logger.bind(tag=LogTag.COLLECTION.value).warning(
                     "Collection already exists",
                     collection=collection_name,
                     error=str(e)
@@ -151,7 +151,7 @@ class VectorStore:
                 return
             raise
         except Exception as e:
-            logger.error("Failed to create collection", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.COLLECTION.value).error("Failed to create collection", collection=collection_name, error=str(e))
             raise CollectionCreationError(
                 f"Failed to create collection '{collection_name}': {str(e)}",
                 details={"collection": collection_name, "error": str(e)}
@@ -171,10 +171,10 @@ class VectorStore:
         try:
             self.client.delete_collection(collection_name=collection_name)
             
-            logger.info("Collection deleted successfully", collection=collection_name)
+            logger.bind(tag=LogTag.COLLECTION.value).info("Collection deleted successfully", collection=collection_name)
             
         except Exception as e:
-            logger.error("Failed to delete collection", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.COLLECTION.value).error("Failed to delete collection", collection=collection_name, error=str(e))
             raise VectorStoreError(
                 f"Failed to delete collection '{collection_name}': {str(e)}",
                 details={"collection": collection_name, "error": str(e)}
@@ -194,7 +194,7 @@ class VectorStore:
             collections = self.client.get_collections()
             return collection_name in [c.name for c in collections.collections]
         except Exception as e:
-            logger.error("Failed to check collection existence", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.COLLECTION.value).error("Failed to check collection existence", collection=collection_name, error=str(e))
             return False
     
     def insert_vectors(
@@ -225,7 +225,7 @@ class VectorStore:
             ... )
         """
         if not vectors:
-            logger.warning("No vectors to insert", collection=collection_name)
+            logger.bind(tag=LogTag.STORAGE.value).warning("No vectors to insert", collection=collection_name)
             return
         
         if not self.collection_exists(collection_name):
@@ -237,13 +237,13 @@ class VectorStore:
         try:
             # Validate vectors
             if not vectors or len(vectors) == 0:
-                logger.warning("No vectors to insert", collection=collection_name)
+                logger.bind(tag=LogTag.STORAGE.value).warning("No vectors to insert", collection=collection_name)
                 return
             
             # Validate vector dimensions (check first vector)
             if vectors[0] and len(vectors[0]) > 0:
                 vector_dim = len(vectors[0])
-                logger.info(
+                logger.bind(tag=LogTag.STORAGE.value).info(
                     "Validating vectors",
                     collection=collection_name,
                     count=len(vectors),
@@ -258,7 +258,7 @@ class VectorStore:
                     point_id = str(uuid.uuid4())
                     ids.append(point_id)
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Preparing points for insertion",
                 collection=collection_name,
                 point_count=len(vectors),
@@ -276,7 +276,7 @@ class VectorStore:
                 points.append(point)
             
             # Insert points
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Inserting points into Qdrant",
                 collection=collection_name,
                 point_count=len(points)
@@ -287,14 +287,14 @@ class VectorStore:
                 points=points
             )
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Vectors inserted successfully",
                 collection=collection_name,
                 count=len(vectors)
             )
             
         except Exception as e:
-            logger.error("Failed to insert vectors", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to insert vectors", collection=collection_name, error=str(e))
             raise VectorInsertionError(
                 f"Failed to insert vectors: {str(e)}",
                 details={"collection": collection_name, "count": len(vectors), "error": str(e)}
@@ -359,7 +359,7 @@ class VectorStore:
                     "vector": result.vector
                 })
             
-            logger.info(
+            logger.bind(tag=LogTag.VECTOR_SEARCH.value).info(
                 "Search completed successfully",
                 collection=collection_name,
                 results=len(formatted_results),
@@ -369,7 +369,7 @@ class VectorStore:
             return formatted_results
             
         except Exception as e:
-            logger.error("Search failed", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.VECTOR_SEARCH.value).error("Search failed", collection=collection_name, error=str(e))
             raise VectorSearchError(
                 f"Search failed: {str(e)}",
                 details={"collection": collection_name, "error": str(e)}
@@ -410,7 +410,7 @@ class VectorStore:
                     points_selector=qdrant_models.PointIdsList(ids=ids)
                 )
                 
-                logger.info(
+                logger.bind(tag=LogTag.STORAGE.value).info(
                     "Vectors deleted by ID",
                     collection=collection_name,
                     count=len(ids)
@@ -422,16 +422,16 @@ class VectorStore:
                     points_selector=self._build_filter(payload_filter)
                 )
                 
-                logger.info(
+                logger.bind(tag=LogTag.STORAGE.value).info(
                     "Vectors deleted by filter",
                     collection=collection_name,
                     filter=payload_filter
                 )
             else:
-                logger.warning("No IDs or filter provided for deletion")
+                logger.bind(tag=LogTag.STORAGE.value).warning("No IDs or filter provided for deletion")
                 
         except Exception as e:
-            logger.error("Failed to delete vectors", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to delete vectors", collection=collection_name, error=str(e))
             raise VectorStoreError(
                 f"Failed to delete vectors: {str(e)}",
                 details={"collection": collection_name, "error": str(e)}
@@ -485,13 +485,13 @@ class VectorStore:
                     f"Collection '{collection_name}' does not exist",
                     details={"collection": collection_name}
                 )
-            logger.error("Failed to get collection info", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.COLLECTION.value).error("Failed to get collection info", collection=collection_name, error=str(e))
             raise CollectionNotFoundError(
                 f"Collection '{collection_name}' not found: {str(e)}",
                 details={"collection": collection_name, "error": str(e)}
             )
         except Exception as e:
-            logger.error("Failed to get collection info", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.COLLECTION.value).error("Failed to get collection info", collection=collection_name, error=str(e))
             raise CollectionNotFoundError(
                 f"Collection '{collection_name}' not found: {str(e)}",
                 details={"collection": collection_name, "error": str(e)}
@@ -508,7 +508,7 @@ class VectorStore:
             collections = self.client.get_collections()
             return [c.name for c in collections.collections]
         except Exception as e:
-            logger.error("Failed to list collections", error=str(e))
+            logger.bind(tag=LogTag.COLLECTION.value).error("Failed to list collections", error=str(e))
             raise VectorStoreError(
                 f"Failed to list collections: {str(e)}",
                 details={"error": str(e)}
@@ -542,7 +542,7 @@ class VectorStore:
                     )
                 )
             else:
-                logger.warning(
+                logger.bind(tag=LogTag.STORAGE.value).warning(
                     "Unsupported filter value type",
                     field=field,
                     type=type(value)
@@ -557,6 +557,6 @@ class VectorStore:
         """Close Qdrant client connection."""
         try:
             self.client.close()
-            logger.info("Qdrant client closed")
+            logger.bind(tag=LogTag.STORAGE.value).info("Qdrant client closed")
         except Exception as e:
-            logger.warning("Failed to close Qdrant client", error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).warning("Failed to close Qdrant client", error=str(e))

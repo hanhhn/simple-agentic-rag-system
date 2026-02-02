@@ -218,7 +218,7 @@ collection_info = Info(
 collection_operations = Counter(
     'collection_operations_total',
     'Total collection operations',
-    ['operation'],  # operation: create, delete, list
+    ['operation', 'collection'],  # operation: create, delete, list
     registry=REGISTRY
 )
 

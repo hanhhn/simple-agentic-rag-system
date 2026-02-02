@@ -4,7 +4,7 @@ Query processor service for RAG pipeline.
 import time
 from typing import List, Dict, Optional
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import ServiceError
 from src.core.config import get_config
 from src.services.embedding_service import EmbeddingService
@@ -59,7 +59,7 @@ class QueryProcessor:
         
         self.validator = QueryValidator()
         
-        logger.info("Query processor initialized")
+        logger.bind(tag=LogTag.RAG.value).info("Query processor initialized")
     
     def process_query(
         self,
@@ -98,7 +98,7 @@ class QueryProcessor:
             # Track validation phase
             rag_query_latency.labels(phase='validation', collection=collection_name).observe(validation_elapsed)
             
-            logger.info(
+            logger.bind(tag=LogTag.RAG.value).info(
                 "Starting RAG query processing",
                 query=query[:100],
                 query_length=len(query),
@@ -116,7 +116,7 @@ class QueryProcessor:
             # Track embedding phase
             rag_query_latency.labels(phase='embedding', collection=collection_name).observe(embedding_elapsed)
             
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Query embedded",
                 embedding_dimension=len(query_embedding),
                 embedding_time=f"{embedding_elapsed:.4f}s"
@@ -136,7 +136,7 @@ class QueryProcessor:
             rag_query_latency.labels(phase='search', collection=collection_name).observe(search_elapsed)
             vector_search_latency.labels(collection=collection_name).observe(search_elapsed)
             
-            logger.info(
+            logger.bind(tag=LogTag.VECTOR_SEARCH.value).info(
                 "Vector search completed",
                 collection=collection_name,
                 results_count=len(search_results),
@@ -160,7 +160,7 @@ class QueryProcessor:
                 contexts = [doc.get("payload", {}).get("text", "") for doc in search_results]
                 total_context_length = sum(len(ctx) for ctx in contexts)
                 
-                logger.info(
+                logger.bind(tag=LogTag.RAG.value).info(
                     "Preparing RAG context",
                     context_count=len(contexts),
                     total_context_length=total_context_length
@@ -179,7 +179,7 @@ class QueryProcessor:
                 result["answer"] = answer
                 result["context_count"] = len(contexts)
                 
-                logger.info(
+                logger.bind(tag=LogTag.RAG.value).info(
                     "RAG generation completed",
                     answer_length=len(answer),
                     rag_time=f"{rag_elapsed:.4f}s"
@@ -188,7 +188,7 @@ class QueryProcessor:
                 rag_elapsed = 0
                 result["answer"] = None
                 result["context_count"] = 0
-                logger.info("Skipping RAG generation", reason="use_rag=False or no results")
+                logger.bind(tag=LogTag.RAG.value).info("Skipping RAG generation", reason="use_rag=False or no results")
             
             total_elapsed = time.time() - start_time
             
@@ -199,7 +199,7 @@ class QueryProcessor:
                 mode='rag' if use_rag and search_results else 'retrieval_only'
             ).inc()
             
-            logger.info(
+            logger.bind(tag=LogTag.RAG.value).info(
                 "Query processed successfully",
                 query=query[:100],
                 collection=collection_name,
@@ -216,7 +216,7 @@ class QueryProcessor:
             
         except ServiceError:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.RAG.value).error(
                 "Query processing failed (ServiceError)",
                 query=query[:100],
                 elapsed_time=f"{elapsed:.4f}s"
@@ -224,7 +224,7 @@ class QueryProcessor:
             raise
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.RAG.value).error(
                 "Failed to process query",
                 query=query[:100],
                 error=str(e),
@@ -270,7 +270,7 @@ class QueryProcessor:
             # Validate inputs
             self.validator.validate_search_params(query, top_k, score_threshold)
             
-            logger.info(
+            logger.bind(tag=LogTag.RAG.value).info(
                 "Processing query (streaming)",
                 query=query[:100],
                 collection=collection_name,
@@ -310,7 +310,7 @@ class QueryProcessor:
                 result["answer"] = None
                 result["context_count"] = 0
             
-            logger.info(
+            logger.bind(tag=LogTag.RAG.value).info(
                 "Query processed successfully (streaming)",
                 query=query[:100],
                 retrieval_count=len(search_results),
@@ -322,7 +322,7 @@ class QueryProcessor:
         except ServiceError:
             raise
         except Exception as e:
-            logger.error("Failed to process query stream", query=query[:100], error=str(e))
+            logger.bind(tag=LogTag.RAG.value).error("Failed to process query stream", query=query[:100], error=str(e))
             raise ServiceError(
                 f"Failed to process query stream: {str(e)}",
                 details={"query": query[:100], "error": str(e)}
@@ -346,10 +346,10 @@ class QueryProcessor:
             
             self.vector_store.create_collection(collection_name, dim)
             
-            logger.info("Collection created for queries", collection=collection_name, dimension=dim)
+            logger.bind(tag=LogTag.COLLECTION.value).info("Collection created for queries", collection=collection_name, dimension=dim)
             
         except Exception as e:
-            logger.error("Failed to create collection", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.COLLECTION.value).error("Failed to create collection", collection=collection_name, error=str(e))
             raise ServiceError(
                 f"Failed to create collection: {str(e)}",
                 details={"collection": collection_name, "error": str(e)}

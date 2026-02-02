@@ -5,7 +5,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.config import get_config
 from src.api.models.common import HealthResponse
 
@@ -55,7 +55,7 @@ async def health_check() -> HealthResponse:
         store.list_collections()
         services_status["qdrant"] = "healthy"
     except Exception as e:
-        logger.error("Qdrant health check failed", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Qdrant health check failed", error=str(e))
         services_status["qdrant"] = f"unhealthy: {str(e)}"
     
     # Check Ollama
@@ -65,7 +65,7 @@ async def health_check() -> HealthResponse:
         llm.list_models()
         services_status["ollama"] = "healthy"
     except Exception as e:
-        logger.error("Ollama health check failed", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Ollama health check failed", error=str(e))
         services_status["ollama"] = f"unhealthy: {str(e)}"
     
     # Check embedding model
@@ -78,14 +78,14 @@ async def health_check() -> HealthResponse:
         model.get_dimension()
         services_status["embeddings"] = "healthy"
     except Exception as e:
-        logger.error("Embedding model health check failed", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Embedding model health check failed", error=str(e))
         services_status["embeddings"] = f"unhealthy: {str(e)}"
     
     # Determine overall status
     all_healthy = all(status == "healthy" for status in services_status.values())
     overall_status = "healthy" if all_healthy else "degraded"
     
-    logger.info(
+    logger.bind(tag=LogTag.API.value).info(
         "Health check completed",
         status=overall_status,
         services=services_status

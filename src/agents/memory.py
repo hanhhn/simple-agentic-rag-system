@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 
 
 logger = get_logger(__name__)
@@ -29,6 +29,30 @@ class Message:
             "timestamp": self.timestamp.isoformat(),
             "metadata": self.metadata
         }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Message":
+        """Create Message from dictionary."""
+        # Handle timestamp conversion
+        timestamp = data.get("timestamp")
+        if isinstance(timestamp, str):
+            try:
+                timestamp = datetime.fromisoformat(timestamp)
+            except (ValueError, AttributeError):
+                logger.bind(tag=LogTag.MEMORY.value).warning(
+                    "Invalid timestamp format, using current time",
+                    timestamp=timestamp
+                )
+                timestamp = datetime.now()
+        elif timestamp is None:
+            timestamp = datetime.now()
+        
+        return cls(
+            role=data.get("role", "user"),
+            content=data.get("content", ""),
+            timestamp=timestamp,
+            metadata=data.get("metadata", {})
+        )
 
 
 @dataclass
@@ -58,6 +82,56 @@ class Conversation:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Conversation":
+        """Create Conversation from dictionary."""
+        # Handle timestamp conversion
+        created_at = data.get("created_at")
+        if isinstance(created_at, str):
+            try:
+                created_at = datetime.fromisoformat(created_at)
+            except (ValueError, AttributeError):
+                logger.bind(tag=LogTag.MEMORY.value).warning(
+                    "Invalid created_at format, using current time",
+                    created_at=created_at
+                )
+                created_at = datetime.now()
+        elif created_at is None:
+            created_at = datetime.now()
+        
+        updated_at = data.get("updated_at")
+        if isinstance(updated_at, str):
+            try:
+                updated_at = datetime.fromisoformat(updated_at)
+            except (ValueError, AttributeError):
+                logger.bind(tag=LogTag.MEMORY.value).warning(
+                    "Invalid updated_at format, using current time",
+                    updated_at=updated_at
+                )
+                updated_at = datetime.now()
+        elif updated_at is None:
+            updated_at = datetime.now()
+        
+        # Load messages with error handling
+        messages = []
+        for msg_dict in data.get("messages", []):
+            try:
+                messages.append(Message.from_dict(msg_dict))
+            except Exception as e:
+                logger.bind(tag=LogTag.MEMORY.value).warning(
+                    "Failed to load message, skipping",
+                    error=str(e),
+                    message_preview=str(msg_dict)[:200]
+                )
+        
+        return cls(
+            id=data.get("id", ""),
+            messages=messages,
+            metadata=data.get("metadata", {}),
+            created_at=created_at,
+            updated_at=updated_at
+        )
 
 
 class Memory(ABC):
@@ -116,7 +190,7 @@ class ConversationMemory(Memory):
         self.current_conversation_id: Optional[str] = None
         self.global_messages: List[Message] = []
         
-        logger.info(
+        logger.bind(tag=LogTag.MEMORY.value).info(
             "Conversation memory initialized",
             max_messages=max_messages
         )
@@ -197,7 +271,7 @@ class ConversationMemory(Memory):
         self.global_messages = []
         self.conversations = {}
         self.current_conversation_id = None
-        logger.info("Conversation memory cleared")
+        logger.bind(tag=LogTag.MEMORY.value).info("Conversation memory cleared")
     
     def to_string(self, max_messages: int = 10) -> str:
         """
@@ -233,12 +307,12 @@ class ConversationMemory(Memory):
                 messages=[],
                 metadata={"started_at": datetime.now().isoformat()}
             )
-            logger.info("New conversation started", id=conversation_id)
+            logger.bind(tag=LogTag.CONVERSATION.value).info("New conversation started", id=conversation_id)
     
     def end_conversation(self) -> None:
         """End current conversation."""
         if self.current_conversation_id:
-            logger.info("Conversation ended", id=self.current_conversation_id)
+            logger.bind(tag=LogTag.CONVERSATION.value).info("Conversation ended", id=self.current_conversation_id)
             self.current_conversation_id = None
     
     def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
@@ -282,7 +356,7 @@ class VectorMemory(Memory):
         self.max_memories = max_memories
         self.memories: List[Dict[str, Any]] = []
         
-        logger.info(
+        logger.bind(tag=LogTag.MEMORY.value).info(
             "Vector memory initialized",
             max_memories=max_memories
         )
@@ -327,7 +401,7 @@ class VectorMemory(Memory):
                 }]
             )
         except Exception as e:
-            logger.warning("Failed to insert into vector memory", error=str(e))
+            logger.bind(tag=LogTag.MEMORY.value).warning("Failed to insert into vector memory", error=str(e))
         
         self.memories.append(memory_item)
         
@@ -375,7 +449,7 @@ class VectorMemory(Memory):
             return memories
             
         except Exception as e:
-            logger.warning("Vector search failed, returning recent memories", error=str(e))
+            logger.bind(tag=LogTag.MEMORY.value).warning("Vector search failed, returning recent memories", error=str(e))
             return self.memories[-limit:]
     
     def clear(self) -> None:
@@ -385,8 +459,8 @@ class VectorMemory(Memory):
             if self.vector_store.collection_exists("agent_memory"):
                 self.vector_store.delete_collection("agent_memory")
         except Exception as e:
-            logger.warning("Failed to clear vector collection", error=str(e))
-        logger.info("Vector memory cleared")
+            logger.bind(tag=LogTag.MEMORY.value).warning("Failed to clear vector collection", error=str(e))
+        logger.bind(tag=LogTag.MEMORY.value).info("Vector memory cleared")
     
     def to_string(self, max_items: int = 5) -> str:
         """

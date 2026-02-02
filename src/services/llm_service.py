@@ -4,7 +4,7 @@ LLM service for generating responses.
 import time
 from typing import List, Dict, Optional
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import LLMError
 from src.core.config import get_config
 from src.llm.base import LLMClient
@@ -55,7 +55,7 @@ class LLMService:
         # Initialize prompt builder
         self.prompt_builder = PromptBuilder()
         
-        logger.info(
+        logger.bind(tag=LogTag.LLM.value).info(
             "LLM service initialized",
             model=self.client.get_model_name(),
             temperature=self.client.temperature,
@@ -88,12 +88,13 @@ class LLMService:
         try:
             model_name = self.client.get_model_name()
             
-            logger.info(
-                "Starting LLM generation",
+            logger.bind(tag=LogTag.LLM.value).info(
+                "Starting generation",
                 model=model_name,
                 prompt_length=len(prompt),
+                prompt_preview=prompt[:200] if len(prompt) > 200 else prompt,
                 use_template=use_template,
-                kwargs=kwargs
+                temperature=kwargs.get("temperature", self.client.temperature)
             )
             
             # Generate response
@@ -103,11 +104,12 @@ class LLMService:
             
             total_elapsed = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Response generated successfully",
                 model=model_name,
                 prompt_length=len(prompt),
                 response_length=len(response),
+                response_preview=response[:200] if len(response) > 200 else response,
                 generate_time=f"{generate_elapsed:.4f}s",
                 total_time=f"{total_elapsed:.4f}s",
                 tokens_per_second=f"{len(response.split()) / generate_elapsed:.2f}" if generate_elapsed > 0 else "0"
@@ -117,7 +119,7 @@ class LLMService:
             
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.LLM.value).error(
                 "Failed to generate response",
                 model=self.client.get_model_name(),
                 error=str(e),
@@ -163,12 +165,13 @@ class LLMService:
         try:
             total_context_length = sum(len(ctx) for ctx in contexts)
             
-            logger.info(
+            logger.bind(tag=LogTag.RAG.value).info(
                 "Starting RAG generation",
                 question=question[:100],
                 question_length=len(question),
                 context_count=len(contexts),
-                total_context_length=total_context_length
+                total_context_length=total_context_length,
+                avg_context_length=f"{total_context_length / len(contexts):.0f}" if contexts else "0"
             )
             
             # Build RAG prompt
@@ -176,7 +179,7 @@ class LLMService:
             prompt = self.prompt_builder.build_rag_prompt(question, contexts)
             prompt_elapsed = time.time() - prompt_start
             
-            logger.info(
+            logger.bind(tag=LogTag.RAG.value).info(
                 "RAG prompt built",
                 prompt_length=len(prompt),
                 build_time=f"{prompt_elapsed:.6f}s"
@@ -187,12 +190,13 @@ class LLMService:
             
             total_elapsed = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.RAG.value).info(
                 "RAG response generated successfully",
                 question=question[:100],
                 context_count=len(contexts),
                 total_context_length=total_context_length,
                 response_length=len(response),
+                response_preview=response[:200] if len(response) > 200 else response,
                 prompt_build_time=f"{prompt_elapsed:.6f}s",
                 total_time=f"{total_elapsed:.4f}s"
             )
@@ -201,7 +205,7 @@ class LLMService:
             
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.RAG.value).error(
                 "Failed to generate RAG response",
                 question=question[:100],
                 context_count=len(contexts),

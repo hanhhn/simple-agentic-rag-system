@@ -7,7 +7,7 @@ from typing import List
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Form
 from fastapi.responses import FileResponse
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import (
     DocumentValidationError,
     DocumentProcessingError,
@@ -100,7 +100,7 @@ async def upload_document(
         # Validate file
         validator.validate_document(file.filename, file_size)
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Document upload requested",
             filename=file.filename,
             collection=collection,
@@ -132,7 +132,7 @@ async def upload_document(
             metadata=metadata
         )
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Document upload task queued",
             filename=file.filename,
             collection=collection,
@@ -150,19 +150,19 @@ async def upload_document(
         )
         
     except (DocumentValidationError, DocumentProcessingError) as e:
-        logger.error("Document validation/processing failed", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Document validation/processing failed", error=str(e))
         raise HTTPException(
             status_code=400,
             detail=e.to_dict()
         )
     except ServiceError as e:
-        logger.error("Document service error", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Document service error", error=str(e))
         raise HTTPException(
             status_code=500,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Unexpected error during document upload", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Unexpected error during document upload", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -202,7 +202,7 @@ async def list_documents(
         DocumentListResponse with documents
     """
     try:
-        logger.info("Listing documents", collection=collection)
+        logger.bind(tag=LogTag.API.value).info("Listing documents", collection=collection)
         
         # Get files from storage
         files = storage_manager.list_files(collection)
@@ -218,7 +218,7 @@ async def list_documents(
                 metadata={}
             ))
         
-        logger.info("Documents listed successfully", collection=collection, count=len(documents))
+        logger.bind(tag=LogTag.API.value).info("Documents listed successfully", collection=collection, count=len(documents))
         
         return DocumentListResponse(
             documents=documents,
@@ -227,7 +227,7 @@ async def list_documents(
         )
         
     except Exception as e:
-        logger.error("Failed to list documents", collection=collection, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to list documents", collection=collection, error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -273,7 +273,7 @@ async def delete_document(
         SuccessResponse
     """
     try:
-        logger.info("Deleting document", collection=collection, filename=filename)
+        logger.bind(tag=LogTag.API.value).info("Deleting document", collection=collection, filename=filename)
         
         # Delete file from storage
         storage_manager.delete_file(filename, collection)
@@ -284,7 +284,7 @@ async def delete_document(
             payload_filter={"filename": filename}
         )
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Document deleted successfully",
             collection=collection,
             filename=filename
@@ -296,13 +296,13 @@ async def delete_document(
         )
         
     except CoreFileNotFoundError as e:
-        logger.error("Document not found", collection=collection, filename=filename, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Document not found", collection=collection, filename=filename, error=str(e))
         raise HTTPException(
             status_code=404,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Failed to delete document", collection=collection, filename=filename, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to delete document", collection=collection, filename=filename, error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -344,7 +344,7 @@ async def download_document(
         File response with document content
     """
     try:
-        logger.info("Downloading document", collection=collection, filename=filename)
+        logger.bind(tag=LogTag.API.value).info("Downloading document", collection=collection, filename=filename)
         
         # Get file content
         content = storage_manager.get_file(filename, collection)
@@ -363,7 +363,7 @@ async def download_document(
         }
         media_type = mime_types.get(ext, "application/octet-stream")
         
-        logger.info("Document download successful", collection=collection, filename=filename)
+        logger.bind(tag=LogTag.API.value).info("Document download successful", collection=collection, filename=filename)
         
         return FileResponse(
             path=str(collection_path),
@@ -372,13 +372,13 @@ async def download_document(
         )
         
     except CoreFileNotFoundError as e:
-        logger.error("Document not found", collection=collection, filename=filename, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Document not found", collection=collection, filename=filename, error=str(e))
         raise HTTPException(
             status_code=404,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Failed to download document", collection=collection, filename=filename, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to download document", collection=collection, filename=filename, error=str(e))
         raise HTTPException(
             status_code=500,
             detail={

@@ -7,7 +7,8 @@ It supports both JSON and text formats and integrates with the application confi
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
+from enum import Enum
 
 import structlog
 from structlog.types import Processor
@@ -16,6 +17,69 @@ from src.core.config import get_config
 
 # Flag to track if logging has been configured
 _logging_configured = False
+
+
+def add_trace_id_processor(logger, method_name, event_dict):
+    """
+    Processor to add trace_id from context to log event.
+    
+    This processor is called for every log event and automatically adds
+    trace_id from the request context if available.
+    """
+    try:
+        from src.api.middleware.tracing import get_trace_id
+        trace_id = get_trace_id()
+        if trace_id:
+            event_dict['trace_id'] = trace_id
+    except (ImportError, RuntimeError, LookupError):
+        # If tracing is not available, continue without trace_id
+        pass
+    return event_dict
+
+
+class LogTag(str, Enum):
+    """Standard log tags for consistent categorization."""
+    # Core system tags
+    SYSTEM = "SYSTEM"
+    CONFIG = "CONFIG"
+    STARTUP = "STARTUP"
+    SHUTDOWN = "SHUTDOWN"
+    
+    # API tags
+    API = "API"
+    MIDDLEWARE = "MIDDLEWARE"
+    REQUEST = "REQUEST"
+    RESPONSE = "RESPONSE"
+    
+    # RAG pipeline tags
+    RAG = "RAG"
+    RETRIEVAL = "RETRIEVAL"
+    EMBEDDING = "EMBEDDING"
+    VECTOR_SEARCH = "VECTOR_SEARCH"
+    LLM = "LLM"
+    GENERATION = "GENERATION"
+    
+    # Agent tags
+    AGENT = "AGENT"
+    AGENT_SERVICE = "AGENT_SERVICE"
+    REACT = "REACT"
+    PLANNER = "PLANNER"
+    REFLECTION = "REFLECTION"
+    TOOL = "TOOL"
+    
+    # Service tags
+    DOCUMENT = "DOCUMENT"
+    COLLECTION = "COLLECTION"
+    STORAGE = "STORAGE"
+    TASK = "TASK"
+    CONVERSATION = "CONVERSATION"
+    MEMORY = "MEMORY"
+    ANALYTICS = "ANALYTICS"
+    
+    # Error tags
+    ERROR = "ERROR"
+    VALIDATION = "VALIDATION"
+    EXCEPTION = "EXCEPTION"
 
 
 def configure_logging() -> None:
@@ -56,6 +120,8 @@ def configure_logging() -> None:
     
     # Define common processors
     shared_processors: list[Processor] = [
+        # Add trace_id from context (must be early in the pipeline)
+        add_trace_id_processor,
         # Add timestamp
         structlog.processors.TimeStamper(fmt="iso"),
         # Add log level
@@ -135,6 +201,10 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """
     Get a structured logger instance.
     
+    This function returns a logger that automatically includes trace_id from context
+    in all log entries when available. The trace_id is added via a processor in the
+    logging pipeline, so it works even for loggers created at module level.
+    
     Args:
         name: Logger name, typically __name__ of the module
         
@@ -144,8 +214,27 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     Example:
         >>> logger = get_logger(__name__)
         >>> logger.info("Processing document", document_id="123")
+        # Log will automatically include trace_id if available in context
     """
     return structlog.get_logger(name)
+
+
+def get_tagged_logger(name: str, tag: LogTag) -> structlog.stdlib.BoundLogger:
+    """
+    Get a logger with a predefined tag.
+    
+    Args:
+        name: Logger name, typically __name__ of the module
+        tag: Log tag for categorization
+        
+    Returns:
+        Configured structlog logger instance with tag bound
+        
+    Example:
+        >>> logger = get_tagged_logger(__name__, LogTag.RAG)
+        >>> logger.info("Starting retrieval")
+    """
+    return structlog.get_logger(name).bind(tag=tag.value)
 
 
 class LoggingContext:
@@ -163,16 +252,19 @@ class LoggingContext:
         ...     logger.info("Operation completed")
     """
     
-    def __init__(self, logger: structlog.stdlib.BoundLogger, **kwargs: Any) -> None:
+    def __init__(self, logger: structlog.stdlib.BoundLogger, tag: Optional[LogTag] = None, **kwargs: Any) -> None:
         """
         Initialize the logging context.
         
         Args:
             logger: The logger instance to bind context to
+            tag: Optional log tag
             **kwargs: Key-value pairs to bind to the logger context
         """
         self.logger = logger
         self.context = kwargs
+        if tag:
+            self.context["tag"] = tag.value
         self.original_context = {}
     
     def __enter__(self) -> structlog.stdlib.BoundLogger:
@@ -191,7 +283,7 @@ class LoggingContext:
         self.logger._context.update(self.original_context)
 
 
-def log_function_call(func_name: str, **kwargs: Any) -> None:
+def log_function_call(func_name: str, tag: Optional[LogTag] = None, **kwargs: Any) -> None:
     """
     Log a function call with its arguments.
     
@@ -200,14 +292,17 @@ def log_function_call(func_name: str, **kwargs: Any) -> None:
     
     Args:
         func_name: Name of the function being called
+        tag: Optional log tag
         **kwargs: Function arguments to log
         
     Example:
         >>> def process_document(doc_id: str, content: str) -> str:
-        ...     log_function_call("process_document", doc_id=doc_id, content_length=len(content))
+        ...     log_function_call("process_document", LogTag.DOCUMENT, doc_id=doc_id, content_length=len(content))
         ...     # Function implementation
     """
     logger = get_logger(__name__)
+    if tag:
+        logger = logger.bind(tag=tag.value)
     logger.info(
         "Function called",
         function=func_name,
@@ -215,7 +310,7 @@ def log_function_call(func_name: str, **kwargs: Any) -> None:
     )
 
 
-def log_exception(exception: Exception, context: dict[str, Any] | None = None) -> None:
+def log_exception(exception: Exception, tag: Optional[LogTag] = None, context: dict[str, Any] | None = None) -> None:
     """
     Log an exception with additional context.
     
@@ -224,15 +319,19 @@ def log_exception(exception: Exception, context: dict[str, Any] | None = None) -
     
     Args:
         exception: The exception to log
+        tag: Optional log tag
         context: Optional dictionary of contextual information
         
     Example:
         >>> try:
         ...     process_document(doc_id)
         ... except DocumentProcessingError as e:
-        ...     log_exception(e, context={"document_id": doc_id, "attempt": 2})
+        ...     log_exception(e, LogTag.DOCUMENT, context={"document_id": doc_id, "attempt": 2})
     """
     logger = get_logger(__name__)
+    if tag:
+        logger = logger.bind(tag=tag.value)
+    
     error_context = {
         "exception_type": type(exception).__name__,
         "exception_message": str(exception),

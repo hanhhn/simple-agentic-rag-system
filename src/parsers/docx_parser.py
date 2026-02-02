@@ -6,7 +6,7 @@ from typing import List
 
 from docx import Document
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import DocumentParseError
 from src.parsers.base import Parser
 
@@ -64,7 +64,7 @@ class DocxParser(Parser):
         # Validate file
         self.validate_file(path)
         
-        logger.info("Parsing DOCX file", filepath=str(path))
+        logger.bind(tag=LogTag.DOCUMENT.value).info("Parsing DOCX file", filepath=str(path))
         
         try:
             # Open document
@@ -77,13 +77,13 @@ class DocxParser(Parser):
                 full_text = self._extract_simple(doc)
             
             if not full_text:
-                logger.warning("No text extracted from DOCX", filepath=str(path))
+                logger.bind(tag=LogTag.DOCUMENT.value).warning("No text extracted from DOCX", filepath=str(path))
                 return ""
             
             # Clean up text
             full_text = self._clean_text(full_text)
             
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Successfully parsed DOCX file",
                 filepath=str(path),
                 char_count=len(full_text),
@@ -93,7 +93,7 @@ class DocxParser(Parser):
             return full_text
             
         except Exception as e:
-            logger.error("Failed to parse DOCX file", filepath=str(path), error=str(e))
+            logger.bind(tag=LogTag.DOCUMENT.value).error("Failed to parse DOCX file", filepath=str(path), error=str(e))
             raise DocumentParseError(
                 f"Failed to parse DOCX file: {str(e)}",
                 details={"filepath": str(filepath), "error": str(e)}

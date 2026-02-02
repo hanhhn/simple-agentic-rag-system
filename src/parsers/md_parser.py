@@ -10,7 +10,7 @@ from markdown.extensions.tables import TableExtension
 from markdown.extensions.fenced_code import FencedCodeExtension
 from markdown.extensions.codehilite import CodeHiliteExtension
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import DocumentParseError
 from src.parsers.base import Parser
 
@@ -78,18 +78,18 @@ class MdParser(Parser):
         # Validate file
         self.validate_file(path)
         
-        logger.info("Parsing markdown file", filepath=str(path))
+        logger.bind(tag=LogTag.DOCUMENT.value).info("Parsing markdown file", filepath=str(path))
         
         try:
             # Read file
             try:
                 content = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
-                logger.warning("UTF-8 decoding failed, trying latin-1", filepath=str(path))
+                logger.bind(tag=LogTag.DOCUMENT.value).warning("UTF-8 decoding failed, trying latin-1", filepath=str(path))
                 content = path.read_text(encoding="latin-1")
             
             if not content:
-                logger.warning("Empty markdown file", filepath=str(path))
+                logger.bind(tag=LogTag.DOCUMENT.value).warning("Empty markdown file", filepath=str(path))
                 return ""
             
             if self.convert_to_plain:
@@ -100,7 +100,7 @@ class MdParser(Parser):
                 # Return raw markdown
                 text = content
             
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Successfully parsed markdown file",
                 filepath=str(path),
                 char_count=len(text),
@@ -110,7 +110,7 @@ class MdParser(Parser):
             return text
             
         except Exception as e:
-            logger.error("Failed to parse markdown file", filepath=str(path), error=str(e))
+            logger.bind(tag=LogTag.DOCUMENT.value).error("Failed to parse markdown file", filepath=str(path), error=str(e))
             raise DocumentParseError(
                 f"Failed to parse markdown file: {str(e)}",
                 details={"filepath": str(filepath), "error": str(e)}

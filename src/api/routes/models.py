@@ -6,7 +6,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import LLMError
 from src.api.models.common import SuccessResponse
 from src.services.llm_service import LLMService
@@ -49,12 +49,12 @@ async def list_llm_models(
         Dictionary with available and current models
     """
     try:
-        logger.info("Listing available LLM models")
+        logger.bind(tag=LogTag.API.value).info("Listing available LLM models")
 
         models = llm_service.list_models()
         current = llm_service.get_model_name()
 
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "LLM models listed",
             count=len(models),
             current=current
@@ -66,13 +66,13 @@ async def list_llm_models(
         }
 
     except LLMError as e:
-        logger.error("Failed to list LLM models", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to list LLM models", error=str(e))
         raise HTTPException(
             status_code=503,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Unexpected error listing LLM models", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Unexpected error listing LLM models", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -120,11 +120,11 @@ async def switch_llm_model(
         SuccessResponse
     """
     try:
-        logger.info("Switching LLM model", model=model)
+        logger.bind(tag=LogTag.API.value).info("Switching LLM model", model=model)
 
         llm_service.set_model(model)
 
-        logger.info("LLM model switched successfully", model=model)
+        logger.bind(tag=LogTag.API.value).info("LLM model switched successfully", model=model)
 
         return SuccessResponse(
             success=True,
@@ -132,7 +132,7 @@ async def switch_llm_model(
         )
 
     except LLMError as e:
-        logger.error("Failed to switch LLM model", model=model, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to switch LLM model", model=model, error=str(e))
         llm_generation_errors.labels(
             model=model,
             error_type="switch_failed"
@@ -142,7 +142,7 @@ async def switch_llm_model(
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Unexpected error switching LLM model", model=model, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Unexpected error switching LLM model", model=model, error=str(e))
         llm_generation_errors.labels(
             model=model,
             error_type="unexpected_error"
@@ -193,13 +193,13 @@ async def get_embedding_info(
         Dictionary with embedding model information
     """
     try:
-        logger.info("Getting embedding model info")
+        logger.bind(tag=LogTag.API.value).info("Getting embedding model info")
 
         model_name = embedding_service.get_model_name()
         dimension = embedding_service.get_dimension()
         cache_stats = embedding_service.get_cache_stats()
 
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Embedding model info retrieved",
             model=model_name,
             dimension=dimension,
@@ -214,7 +214,7 @@ async def get_embedding_info(
         }
 
     except Exception as e:
-        logger.error("Failed to get embedding model info", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get embedding model info", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -257,11 +257,11 @@ async def clear_embedding_cache(
         SuccessResponse
     """
     try:
-        logger.info("Clearing embedding cache")
+        logger.bind(tag=LogTag.API.value).info("Clearing embedding cache")
 
         embedding_service.clear_cache()
 
-        logger.info("Embedding cache cleared successfully")
+        logger.bind(tag=LogTag.API.value).info("Embedding cache cleared successfully")
 
         return SuccessResponse(
             success=True,
@@ -269,7 +269,7 @@ async def clear_embedding_cache(
         )
 
     except Exception as e:
-        logger.error("Failed to clear embedding cache", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to clear embedding cache", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 from sentence_transformers import SentenceTransformer
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import EmbeddingModelNotFoundError
 from src.core.config import get_config
 
@@ -48,7 +48,7 @@ class ModelLoader:
         
         self._loaded_models: dict = {}
         
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "ModelLoader initialized",
             cache_dir=str(self.cache_dir)
         )
@@ -75,14 +75,14 @@ class ModelLoader:
         # Check if model is already loaded
         if model_name in self._loaded_models:
             elapsed = time.time() - start_time
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Model already loaded in memory",
                 model=model_name,
                 retrieval_time=f"{elapsed:.4f}s"
             )
             return self._loaded_models[model_name]
         
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "Loading Granite embedding model",
             model=model_name,
             cache_dir=str(self.cache_dir)
@@ -96,17 +96,17 @@ class ModelLoader:
             }
 
             # Load model
-            logger.info("Starting model download/load", model=model_name)
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Starting model download/load", model=model_name)
             load_start = time.time()
             model = SentenceTransformer(model_name, **model_kwargs)
             load_elapsed = time.time() - load_start
-            logger.info("Model downloaded/loaded", model=model_name, load_time=f"{load_elapsed:.4f}s")
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Model downloaded/loaded", model=model_name, load_time=f"{load_elapsed:.4f}s")
 
             # Get model details
             dimension = model.get_sentence_embedding_dimension()
             max_seq_length = model.max_seq_length if hasattr(model, 'max_seq_length') else 'unknown'
 
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Granite model loaded successfully",
                 model=model_name,
                 dimension=dimension,
@@ -118,15 +118,15 @@ class ModelLoader:
             try:
                 for param in model.parameters():
                     param.requires_grad = False
-                logger.info("Set model to eval mode", model=model_name)
+                logger.bind(tag=LogTag.EMBEDDING.value).info("Set model to eval mode", model=model_name)
             except Exception as e:
-                logger.warning("Could not set requires_grad=False", model=model_name, error=str(e))
+                logger.bind(tag=LogTag.EMBEDDING.value).warning("Could not set requires_grad=False", model=model_name, error=str(e))
             
             # Cache in memory
             self._loaded_models[model_name] = model
             
             total_elapsed = time.time() - start_time
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Model caching completed",
                 model=model_name,
                 cache_size=len(self._loaded_models),
@@ -137,7 +137,7 @@ class ModelLoader:
             
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.EMBEDDING.value).error(
                 "Failed to load Granite model",
                 model=model_name,
                 error=str(e),
@@ -167,13 +167,13 @@ class ModelLoader:
         """
         if model_name in self._loaded_models:
             del self._loaded_models[model_name]
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Model unloaded from memory",
                 model=model_name,
                 remaining_models=len(self._loaded_models)
             )
         else:
-            logger.warning(
+            logger.bind(tag=LogTag.EMBEDDING.value).warning(
                 "Model not found in memory",
                 model=model_name,
                 cached_models=list(self._loaded_models.keys())
@@ -190,7 +190,7 @@ class ModelLoader:
         count = len(self._loaded_models)
         models_to_unload = list(self._loaded_models.keys())
         self._loaded_models.clear()
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "All models unloaded from memory",
             unloaded_count=count,
             models=models_to_unload
@@ -230,7 +230,7 @@ class ModelLoader:
         """
         import shutil
         
-        logger.warning("Clearing model cache", cache_dir=str(self.cache_dir))
+        logger.bind(tag=LogTag.EMBEDDING.value).warning("Clearing model cache", cache_dir=str(self.cache_dir))
         
         # Unload all models first
         self.unload_all()
@@ -239,7 +239,7 @@ class ModelLoader:
         for item in self.cache_dir.iterdir():
             if item.is_dir():
                 shutil.rmtree(item)
-                logger.info("Removed model from cache", model=item.name)
+                logger.bind(tag=LogTag.EMBEDDING.value).info("Removed model from cache", model=item.name)
     
     def get_cache_size(self) -> int:
         """

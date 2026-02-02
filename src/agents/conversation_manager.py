@@ -9,7 +9,7 @@ import json
 import hashlib
 import uuid
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.agents.memory import Message, Conversation
 
 
@@ -181,7 +181,7 @@ class ConversationManager:
         if storage_path:
             self._load_from_storage()
         
-        logger.info(
+        logger.bind(tag=LogTag.CONVERSATION.value).info(
             "Conversation manager initialized",
             storage_path=storage_path,
             max_conversations=max_conversations,
@@ -240,7 +240,7 @@ class ConversationManager:
         if self.current_session_id:
             self._add_conversation_to_session(self.current_session_id, conv_id)
         
-        logger.info(
+        logger.bind(tag=LogTag.CONVERSATION.value).info(
             "Conversation created",
             conversation_id=conv_id,
             title=title,
@@ -276,7 +276,7 @@ class ConversationManager:
         metadata = self.conversation_metadata.get(conversation_id)
         
         if not conversation or not metadata:
-            logger.warning("Conversation not found", conversation_id=conversation_id)
+            logger.bind(tag=LogTag.CONVERSATION.value).warning("Conversation not found", conversation_id=conversation_id)
             return
         
         conversation.add_message(message)
@@ -328,7 +328,7 @@ class ConversationManager:
         
         metadata.updated_at = datetime.now()
         
-        logger.info(
+        logger.bind(tag=LogTag.CONVERSATION.value).info(
             "Conversation metadata updated",
             conversation_id=conversation_id,
             updates=list(updates.keys())
@@ -348,7 +348,7 @@ class ConversationManager:
         metadata.archived_at = datetime.now()
         metadata.updated_at = datetime.now()
         
-        logger.info("Conversation archived", conversation_id=conversation_id)
+        logger.bind(tag=LogTag.CONVERSATION.value).info("Conversation archived", conversation_id=conversation_id)
         self._save_to_storage()
         return True
     
@@ -372,7 +372,7 @@ class ConversationManager:
                 metadata.status = ConversationStatus.DELETED.value
                 metadata.updated_at = datetime.now()
         
-        logger.info(
+        logger.bind(tag=LogTag.CONVERSATION.value).info(
             "Conversation deleted",
             conversation_id=conversation_id,
             permanent=permanent
@@ -574,7 +574,7 @@ class ConversationManager:
         self.sessions[session_id] = session
         self.current_session_id = session_id
         
-        logger.info("Session created", session_id=session_id, user_id=user_id)
+        logger.bind(tag=LogTag.CONVERSATION.value).info("Session created", session_id=session_id, user_id=user_id)
         
         self._save_to_storage()
         return session_id
@@ -589,7 +589,7 @@ class ConversationManager:
             return False
         
         self.current_session_id = session_id
-        logger.info("Current session set", session_id=session_id)
+        logger.bind(tag=LogTag.CONVERSATION.value).info("Current session set", session_id=session_id)
         return True
     
     def _add_conversation_to_session(self, session_id: str, conversation_id: str) -> None:
@@ -712,7 +712,7 @@ class ConversationManager:
             self.conversations[conv_id] = conversation
             self.conversation_metadata[conv_id] = metadata
             
-            logger.info("Conversation imported", conversation_id=conv_id)
+            logger.bind(tag=LogTag.CONVERSATION.value).info("Conversation imported", conversation_id=conv_id)
             
             self._save_to_storage()
             return conv_id
@@ -740,7 +740,7 @@ class ConversationManager:
                     if self.archive_conversation(conv_id):
                         archived_count += 1
         
-        logger.info(
+        logger.bind(tag=LogTag.CONVERSATION.value).info(
             "Old conversations archived",
             count=archived_count,
             days=cutoff_days
@@ -784,7 +784,7 @@ class ConversationManager:
                 json.dump(data, f, indent=2)
             
         except Exception as e:
-            logger.error("Failed to save to storage", error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to save to storage", error=str(e))
     
     def _load_from_storage(self) -> None:
         """Load from persistent storage."""
@@ -794,35 +794,125 @@ class ConversationManager:
         try:
             import os
             if not os.path.exists(self.storage_path):
-                logger.info("No existing storage file found, starting fresh")
+                logger.bind(tag=LogTag.STORAGE.value).info("No existing storage file found, starting fresh")
                 return
             
-            with open(self.storage_path, 'r') as f:
-                data = json.load(f)
+            # Read file content first to check for issues
+            with open(self.storage_path, 'r', encoding='utf-8') as f:
+                file_content = f.read()
             
-            # Load conversations
-            for conv_id, conv_dict in data.get("conversations", {}).items():
-                self.conversations[conv_id] = Conversation(
-                    id=conv_id,
-                    messages=[Message.from_dict(m) for m in conv_dict.get("messages", [])],
-                    metadata=conv_dict.get("metadata", {})
+            # Check if file is empty or whitespace only
+            if not file_content.strip():
+                logger.bind(tag=LogTag.STORAGE.value).warning("Storage file is empty, starting fresh")
+                return
+            
+            # Try to parse JSON
+            try:
+                data = json.loads(file_content)
+            except json.JSONDecodeError as json_err:
+                logger.bind(tag=LogTag.STORAGE.value).error(
+                    "Failed to parse JSON from storage",
+                    error=str(json_err),
+                    error_position=f"line {json_err.lineno}, column {json_err.colno}",
+                    file_size=len(file_content),
+                    file_preview=file_content[:500] if len(file_content) > 500 else file_content
                 )
+                
+                # Try to create a backup of corrupted file
+                try:
+                    backup_path = f"{self.storage_path}.corrupted.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    import shutil
+                    shutil.copy2(self.storage_path, backup_path)
+                    logger.info("Created backup of corrupted file", backup_path=backup_path)
+                except Exception as backup_err:
+                    logger.bind(tag=LogTag.STORAGE.value).warning("Failed to create backup", error=str(backup_err))
+                
+                # Start fresh instead of crashing
+                logger.bind(tag=LogTag.STORAGE.value).warning("Starting with empty storage due to corrupted file")
+                return
             
-            # Load metadata
+            # Validate data structure
+            if not isinstance(data, dict):
+                logger.bind(tag=LogTag.STORAGE.value).error("Invalid data structure in storage file, expected dict")
+                return
+            
+            # Load conversations with error handling
+            conversations_loaded = 0
+            conversations_failed = 0
+            for conv_id, conv_dict in data.get("conversations", {}).items():
+                try:
+                    # Ensure id is set
+                    if "id" not in conv_dict:
+                        conv_dict["id"] = conv_id
+                    self.conversations[conv_id] = Conversation.from_dict(conv_dict)
+                    conversations_loaded += 1
+                except Exception as conv_err:
+                    conversations_failed += 1
+                    logger.bind(tag=LogTag.CONVERSATION.value).warning(
+                        "Failed to load conversation",
+                        conversation_id=conv_id,
+                        error=str(conv_err),
+                        error_type=type(conv_err).__name__
+                    )
+            
+            # Load metadata with error handling
+            metadata_loaded = 0
+            metadata_failed = 0
             for conv_id, meta_dict in data.get("conversation_metadata", {}).items():
-                self.conversation_metadata[conv_id] = ConversationMetadata.from_dict(meta_dict)
+                try:
+                    self.conversation_metadata[conv_id] = ConversationMetadata.from_dict(meta_dict)
+                    metadata_loaded += 1
+                except Exception as meta_err:
+                    metadata_failed += 1
+                    logger.bind(tag=LogTag.CONVERSATION.value).warning(
+                        "Failed to load conversation metadata",
+                        conversation_id=conv_id,
+                        error=str(meta_err)
+                    )
             
-            # Load sessions
+            # Load sessions with error handling
+            sessions_loaded = 0
+            sessions_failed = 0
             for session_id, session_dict in data.get("sessions", {}).items():
-                self.sessions[session_id] = Session.from_dict(session_dict)
+                try:
+                    self.sessions[session_id] = Session.from_dict(session_dict)
+                    sessions_loaded += 1
+                except Exception as session_err:
+                    sessions_failed += 1
+                    logger.bind(tag=LogTag.CONVERSATION.value).warning(
+                        "Failed to load session",
+                        session_id=session_id,
+                        error=str(session_err)
+                    )
             
             self.current_session_id = data.get("current_session_id")
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Loaded from storage",
-                conversations=len(self.conversations),
-                sessions=len(self.sessions)
+                conversations_loaded=conversations_loaded,
+                conversations_failed=conversations_failed,
+                metadata_loaded=metadata_loaded,
+                metadata_failed=metadata_failed,
+                sessions_loaded=sessions_loaded,
+                sessions_failed=sessions_failed,
+                total_conversations=len(self.conversations),
+                total_sessions=len(self.sessions)
             )
             
+            # If there were failures, save the cleaned data
+            if conversations_failed > 0 or metadata_failed > 0 or sessions_failed > 0:
+                logger.bind(tag=LogTag.STORAGE.value).info("Saving cleaned data after partial load failures")
+                self._save_to_storage()
+            
+        except FileNotFoundError:
+            logger.bind(tag=LogTag.STORAGE.value).info("Storage file not found, starting fresh")
+        except PermissionError as e:
+            logger.bind(tag=LogTag.STORAGE.value).error("Permission denied accessing storage file", error=str(e))
         except Exception as e:
-            logger.error("Failed to load from storage", error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error(
+                "Failed to load from storage",
+                error=str(e),
+                error_type=type(e).__name__,
+                storage_path=self.storage_path,
+                exc_info=True
+            )

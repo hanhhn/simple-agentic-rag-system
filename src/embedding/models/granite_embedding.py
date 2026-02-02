@@ -26,7 +26,7 @@ os.environ['OMP_PLACES'] = '1'
 os.environ['OMP_PROC_BIND'] = 'TRUE'
 os.environ['OMP_WAIT_POLICY'] = 'ACTIVE'
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import EmbeddingGenerationError
 from src.embedding.base import EmbeddingModel
 from src.embedding.model_loader import ModelLoader
@@ -94,7 +94,7 @@ class GraniteEmbeddingModel(EmbeddingModel):
         if lazy_load:
             # Lazy loading - safer for multiprocessing (Celery workers)
             self.model = None
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Granite model initialized (lazy loading)",
                 model=model_name,
                 dimension=self.DIMENSION,
@@ -103,7 +103,7 @@ class GraniteEmbeddingModel(EmbeddingModel):
         else:
             # Eager loading
             self.model = self.loader.load_model(model_name)
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Granite model initialized",
                 model=model_name,
                 dimension=self.DIMENSION,
@@ -113,22 +113,22 @@ class GraniteEmbeddingModel(EmbeddingModel):
     @property
     def _loaded_model(self):
         """Lazy load of model when first accessed."""
-        logger.info("Accessing _loaded_model property", model=self._model_name, has_model=self.model is not None)
+        logger.bind(tag=LogTag.EMBEDDING.value).info("Accessing _loaded_model property", model=self._model_name, has_model=self.model is not None)
 
         if self.model is None:
-            logger.info("Loading Granite model on first access", model=self._model_name)
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Loading Granite model on first access", model=self._model_name)
             try:
                 self.model = self.loader.load_model(self._model_name)
-                logger.info("Granite model loaded successfully", model=self._model_name)
+                logger.bind(tag=LogTag.EMBEDDING.value).info("Granite model loaded successfully", model=self._model_name)
             except Exception:
-                logger.error(
+                logger.bind(tag=LogTag.EMBEDDING.value).error(
                     "Failed to load Granite model in _loaded_model property",
                     model=self._model_name,
                     exc_info=True
                 )
                 raise
 
-        logger.info("Returning Granite model from _loaded_model property", model=self._model_name)
+        logger.bind(tag=LogTag.EMBEDDING.value).info("Returning Granite model from _loaded_model property", model=self._model_name)
         return self.model
 
     def encode(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
@@ -157,14 +157,14 @@ class GraniteEmbeddingModel(EmbeddingModel):
         if not texts:
             return []
 
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "Starting Granite encode operation",
             count=len(texts),
             batch_size=batch_size
         )
 
         try:
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Encoding texts with Granite",
                 count=len(texts),
                 batch_size=batch_size,
@@ -173,14 +173,14 @@ class GraniteEmbeddingModel(EmbeddingModel):
 
             # Encode texts using lazy-loaded model
             model = self._loaded_model
-            logger.info("Granite model loaded, starting encoding", count=len(texts), batch_size=batch_size)
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Granite model loaded, starting encoding", count=len(texts), batch_size=batch_size)
 
             try:
                 # Granite encoding with long context support
-                logger.info("Calling model.encode()", text_count=len(texts), batch_size=batch_size)
+                logger.bind(tag=LogTag.EMBEDDING.value).info("Calling model.encode()", text_count=len(texts), batch_size=batch_size)
 
                 # Disable progress bar to prevent stderr pollution in Docker
-                logger.info("Starting actual encoding computation...")
+                logger.bind(tag=LogTag.EMBEDDING.value).info("Starting actual encoding computation...")
                 embeddings = model.encode(
                     texts,
                     batch_size=batch_size,
@@ -189,13 +189,13 @@ class GraniteEmbeddingModel(EmbeddingModel):
                     normalize_embeddings=True
                 )
 
-                logger.info("Model.encode() call completed", embeddings_count=len(embeddings) if embeddings is not None else 0)
-                logger.info("Granite encoding completed, converting to list", embedding_count=len(embeddings) if embeddings is not None else 0)
+                logger.bind(tag=LogTag.EMBEDDING.value).info("Model.encode() call completed", embeddings_count=len(embeddings) if embeddings is not None else 0)
+                logger.bind(tag=LogTag.EMBEDDING.value).info("Granite encoding completed, converting to list", embedding_count=len(embeddings) if embeddings is not None else 0)
 
                 # Convert to list format
                 result = [embedding.tolist() for embedding in embeddings]
 
-                logger.info(
+                logger.bind(tag=LogTag.EMBEDDING.value).info(
                     "Successfully encoded texts with Granite",
                     count=len(texts),
                     dimension=self.DIMENSION
@@ -204,7 +204,7 @@ class GraniteEmbeddingModel(EmbeddingModel):
                 return result
 
             except Exception as encode_error:
-                logger.error(
+                logger.bind(tag=LogTag.EMBEDDING.value).error(
                     "Granite model.encode() failed",
                     error=str(encode_error),
                     error_type=type(encode_error).__name__,
@@ -221,7 +221,7 @@ class GraniteEmbeddingModel(EmbeddingModel):
                     }
                 )
         except Exception as e:
-            logger.error("Failed to encode texts with Granite", error=str(e), count=len(texts))
+            logger.bind(tag=LogTag.EMBEDDING.value).error("Failed to encode texts with Granite", error=str(e), count=len(texts))
             raise EmbeddingGenerationError(
                 f"Failed to generate Granite embeddings: {str(e)}",
                 details={"error": str(e), "text_count": len(texts)}
@@ -251,7 +251,7 @@ class GraniteEmbeddingModel(EmbeddingModel):
             return embeddings[0] if embeddings else []
 
         except Exception as e:
-            logger.error("Failed to encode text with Granite", text=text[:100], error=str(e))
+            logger.bind(tag=LogTag.EMBEDDING.value).error("Failed to encode text with Granite", text=text[:100], error=str(e))
             raise EmbeddingGenerationError(
                 f"Failed to generate Granite embedding: {str(e)}",
                 details={"error": str(e), "text_preview": text[:100]}

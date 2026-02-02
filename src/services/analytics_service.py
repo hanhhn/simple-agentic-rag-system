@@ -8,7 +8,7 @@ from enum import Enum
 import statistics
 from collections import Counter, defaultdict
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.agents.conversation_manager import (
     ConversationManager,
     ConversationStats,
@@ -205,7 +205,7 @@ class AnalyticsService:
         # Metric storage
         self.metrics: Dict[str, List[MetricDataPoint]] = defaultdict(list)
         
-        logger.info(
+        logger.bind(tag=LogTag.ANALYTICS.value).info(
             "Analytics service initialized",
             enable_anomaly_detection=enable_anomaly_detection,
             anomaly_threshold=anomaly_threshold
@@ -418,7 +418,7 @@ class AnalyticsService:
                 if summary and trend:
                     insights.extend(self._generate_metric_insights(metric_type, summary, trend))
             except Exception as e:
-                logger.warning("Failed to generate insights for metric", metric_type=metric_type.value, error=str(e))
+                logger.bind(tag=LogTag.ANALYTICS.value).warning("Failed to generate insights for metric", metric_type=metric_type.value, error=str(e))
         
         # Sort by severity
         severity_order = {"critical": 0, "warning": 1, "info": 2}
@@ -676,5 +676,5 @@ class AnalyticsService:
             ]
             cleared += original_count - len(self.metrics[metric_type])
         
-        logger.info("Old metrics cleared", count=cleared, days=days)
+        logger.bind(tag=LogTag.ANALYTICS.value).info("Old metrics cleared", count=cleared, days=days)
         return cleared

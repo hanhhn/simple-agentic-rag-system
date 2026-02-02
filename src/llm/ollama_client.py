@@ -6,7 +6,7 @@ from typing import AsyncIterator, Dict, Iterator, Optional
 
 import httpx
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import LLMConnectionError, LLMGenerationError, LLMModelNotFoundError
 from src.core.config import get_config
 from src.llm.base import LLMClient
@@ -61,7 +61,7 @@ class OllamaClient(LLMClient):
         self._client = httpx.Client(timeout=self.timeout)
         self._async_client = httpx.AsyncClient(timeout=self.timeout)
         
-        logger.info(
+        logger.bind(tag=LogTag.LLM.value).info(
             "Ollama client initialized",
             model=self.model_name,
             base_url=self.base_url
@@ -88,7 +88,7 @@ class OllamaClient(LLMClient):
             >>> print(response)
         """
         try:
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Generating response from Ollama",
                 model=self.model_name,
                 prompt_length=len(prompt)
@@ -120,7 +120,7 @@ class OllamaClient(LLMClient):
             data = response.json()
             generated_text = data.get("response", "")
             
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Successfully generated response",
                 model=self.model_name,
                 response_length=len(generated_text)
@@ -129,19 +129,19 @@ class OllamaClient(LLMClient):
             return generated_text
             
         except httpx.ConnectError as e:
-            logger.error("Failed to connect to Ollama", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to connect to Ollama", error=str(e))
             raise LLMConnectionError(
                 f"Failed to connect to Ollama server: {str(e)}",
                 details={"url": self.base_url, "error": str(e)}
             )
         except httpx.HTTPStatusError as e:
-            logger.error("Ollama returned HTTP error", status=e.response.status_code, error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Ollama returned HTTP error", status=e.response.status_code, error=str(e))
             raise LLMGenerationError(
                 f"Ollama returned error: {e.response.status_code}",
                 details={"status": e.response.status_code, "error": str(e)}
             )
         except Exception as e:
-            logger.error("Failed to generate response", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to generate response", error=str(e))
             raise LLMGenerationError(
                 f"Failed to generate response: {str(e)}",
                 details={"error": str(e)}
@@ -164,7 +164,7 @@ class OllamaClient(LLMClient):
             ...     print(chunk, end='')
         """
         try:
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Generating streaming response from Ollama",
                 model=self.model_name,
                 prompt_length=len(prompt)
@@ -203,22 +203,22 @@ class OllamaClient(LLMClient):
                             yield json_data["response"]
                             
                     except Exception as e:
-                        logger.warning("Failed to parse stream chunk", error=str(e))
+                        logger.bind(tag=LogTag.LLM.value).warning("Failed to parse stream chunk", error=str(e))
                         continue
             
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Successfully generated streaming response",
                 model=self.model_name
             )
             
         except httpx.ConnectError as e:
-            logger.error("Failed to connect to Ollama", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to connect to Ollama", error=str(e))
             raise LLMConnectionError(
                 f"Failed to connect to Ollama server: {str(e)}",
                 details={"url": self.base_url, "error": str(e)}
             )
         except Exception as e:
-            logger.error("Failed to generate streaming response", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to generate streaming response", error=str(e))
             raise LLMGenerationError(
                 f"Failed to generate streaming response: {str(e)}",
                 details={"error": str(e)}
@@ -236,7 +236,7 @@ class OllamaClient(LLMClient):
             Generated text response
         """
         try:
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Generating async response from Ollama",
                 model=self.model_name,
                 prompt_length=len(prompt)
@@ -268,7 +268,7 @@ class OllamaClient(LLMClient):
             data = response.json()
             generated_text = data.get("response", "")
             
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Successfully generated async response",
                 model=self.model_name,
                 response_length=len(generated_text)
@@ -277,13 +277,13 @@ class OllamaClient(LLMClient):
             return generated_text
             
         except httpx.ConnectError as e:
-            logger.error("Failed to connect to Ollama", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to connect to Ollama", error=str(e))
             raise LLMConnectionError(
                 f"Failed to connect to Ollama server: {str(e)}",
                 details={"url": self.base_url, "error": str(e)}
             )
         except Exception as e:
-            logger.error("Failed to generate async response", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to generate async response", error=str(e))
             raise LLMGenerationError(
                 f"Failed to generate async response: {str(e)}",
                 details={"error": str(e)}
@@ -308,12 +308,12 @@ class OllamaClient(LLMClient):
             data = response.json()
             models = [model["name"] for model in data.get("models", [])]
             
-            logger.info("Retrieved available models", count=len(models))
+            logger.bind(tag=LogTag.LLM.value).info("Retrieved available models", count=len(models))
             
             return models
             
         except Exception as e:
-            logger.error("Failed to list models", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to list models", error=str(e))
             raise LLMConnectionError(
                 f"Failed to retrieve models: {str(e)}",
                 details={"error": str(e)}
@@ -353,7 +353,7 @@ class OllamaClient(LLMClient):
             >>> client.pull_model("llama2")
         """
         try:
-            logger.info("Pulling model from Ollama", model=model_name)
+            logger.bind(tag=LogTag.LLM.value).info("Pulling model from Ollama", model=model_name)
             
             response = self._client.post(
                 f"{self.base_url}/api/pull",
@@ -361,10 +361,10 @@ class OllamaClient(LLMClient):
             )
             response.raise_for_status()
             
-            logger.info("Model pulled successfully", model=model_name)
+            logger.bind(tag=LogTag.LLM.value).info("Model pulled successfully", model=model_name)
             
         except Exception as e:
-            logger.error("Failed to pull model", model=model_name, error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to pull model", model=model_name, error=str(e))
             raise LLMConnectionError(
                 f"Failed to pull model: {str(e)}",
                 details={"model": model_name, "error": str(e)}
@@ -396,7 +396,7 @@ class OllamaClient(LLMClient):
         """
         self._client.close()
         self._async_client.aclose()
-        logger.info("Ollama client closed")
+        logger.bind(tag=LogTag.LLM.value).info("Ollama client closed")
     
     async def aclose(self) -> None:
         """
@@ -404,4 +404,4 @@ class OllamaClient(LLMClient):
         """
         await self._async_client.aclose()
         self._client.close()
-        logger.info("Ollama async client closed")
+        logger.bind(tag=LogTag.LLM.value).info("Ollama async client closed")

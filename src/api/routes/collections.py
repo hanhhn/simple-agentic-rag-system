@@ -6,7 +6,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import (
     CollectionNotFoundError,
     CollectionCreationError,
@@ -74,7 +74,7 @@ async def create_collection(
             # Use embedding service dimension
             request.dimension = embedding_service.get_dimension()
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Creating collection",
             name=request.name,
             dimension=request.dimension,
@@ -91,7 +91,7 @@ async def create_collection(
         # Track collection creation
         collection_operations.labels(operation='create', collection=request.name).inc()
         
-        logger.info("Collection created successfully", name=request.name)
+        logger.bind(tag=LogTag.API.value).info("Collection created successfully", name=request.name)
         
         return CollectionResponse(
             collection=CollectionInfo(
@@ -106,19 +106,19 @@ async def create_collection(
         )
         
     except ValidationError as e:
-        logger.error("Collection validation failed", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Collection validation failed", error=str(e))
         raise HTTPException(
             status_code=400,
             detail=e.to_dict()
         )
     except CollectionCreationError as e:
-        logger.error("Collection creation failed", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Collection creation failed", error=str(e))
         raise HTTPException(
             status_code=500,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Unexpected error during collection creation", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Unexpected error during collection creation", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -151,7 +151,7 @@ async def list_collections(
         CollectionListResponse with all collections
     """
     try:
-        logger.info("Listing collections")
+        logger.bind(tag=LogTag.API.value).info("Listing collections")
         
         # Get collections from Qdrant
         collection_names = vector_store.list_collections()
@@ -170,7 +170,7 @@ async def list_collections(
                     distance_metric="Cosine"  # Default, would need to store this
                 ))
             except Exception as e:
-                logger.warning("Failed to get collection info", collection=name, error=str(e))
+                logger.bind(tag=LogTag.API.value).warning("Failed to get collection info", collection=name, error=str(e))
                 # Still include basic info
                 collections.append(CollectionInfo(
                     name=name,
@@ -181,7 +181,7 @@ async def list_collections(
                     distance_metric="Cosine"
                 ))
         
-        logger.info("Collections listed successfully", count=len(collections))
+        logger.bind(tag=LogTag.API.value).info("Collections listed successfully", count=len(collections))
         
         return CollectionListResponse(
             collections=collections,
@@ -189,7 +189,7 @@ async def list_collections(
         )
         
     except Exception as e:
-        logger.error("Failed to list collections", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to list collections", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -234,7 +234,7 @@ async def get_collection(
         # Validate collection name
         validator.validate_collection_name(collection_name)
         
-        logger.info("Getting collection info", collection=collection_name)
+        logger.bind(tag=LogTag.API.value).info("Getting collection info", collection=collection_name)
         
         # Get collection info
         info = vector_store.get_collection_info(collection_name)
@@ -252,13 +252,13 @@ async def get_collection(
         )
         
     except CollectionNotFoundError as e:
-        logger.error("Collection not found", collection=collection_name, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Collection not found", collection=collection_name, error=str(e))
         raise HTTPException(
             status_code=404,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Failed to get collection", collection=collection_name, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get collection", collection=collection_name, error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -312,7 +312,7 @@ async def get_collection_stats(
         Dictionary with collection statistics
     """
     try:
-        logger.info("Getting collection statistics", collection=collection_name)
+        logger.bind(tag=LogTag.API.value).info("Getting collection statistics", collection=collection_name)
         
         # Get collection info from Qdrant
         info = vector_store.get_collection_info(collection_name)
@@ -329,7 +329,7 @@ async def get_collection_stats(
             "points_count": info.get("vector_count", 0)
         }
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Collection statistics retrieved",
             collection=collection_name,
             vector_count=stats["vector_count"]
@@ -338,13 +338,13 @@ async def get_collection_stats(
         return stats
         
     except CollectionNotFoundError as e:
-        logger.error("Collection not found", collection=collection_name, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Collection not found", collection=collection_name, error=str(e))
         raise HTTPException(
             status_code=404,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Failed to get collection stats", collection=collection_name, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get collection stats", collection=collection_name, error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -392,7 +392,7 @@ async def delete_collection(
         # Validate collection name
         validator.validate_collection_name(collection_name)
         
-        logger.info("Deleting collection", collection=collection_name)
+        logger.bind(tag=LogTag.API.value).info("Deleting collection", collection=collection_name)
         
         # Delete from vector store
         vector_store.delete_collection(collection_name)
@@ -400,7 +400,7 @@ async def delete_collection(
         # Delete from storage
         storage_manager.delete_collection(collection_name)
         
-        logger.info("Collection deleted successfully", collection=collection_name)
+        logger.bind(tag=LogTag.API.value).info("Collection deleted successfully", collection=collection_name)
         
         return SuccessResponse(
             success=True,
@@ -408,13 +408,13 @@ async def delete_collection(
         )
         
     except CollectionNotFoundError as e:
-        logger.error("Collection not found", collection=collection_name, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Collection not found", collection=collection_name, error=str(e))
         raise HTTPException(
             status_code=404,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Failed to delete collection", collection=collection_name, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to delete collection", collection=collection_name, error=str(e))
         raise HTTPException(
             status_code=500,
             detail={

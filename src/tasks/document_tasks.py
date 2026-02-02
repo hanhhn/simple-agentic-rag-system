@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 
 from src.tasks.celery_app import celery_app
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import DocumentProcessingError
 from src.services.document_processor import DocumentProcessor
 from src.services.storage_manager import StorageManager
@@ -56,7 +56,7 @@ def process_document_task(
         DocumentProcessingError: If processing fails
     """
     try:
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Starting document processing task",
             storage_path=storage_path,
             collection=collection,
@@ -103,7 +103,7 @@ def process_document_task(
             }
         )
         
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Document processing completed, embedding task queued",
             storage_path=storage_path,
             collection=collection,
@@ -126,7 +126,7 @@ def process_document_task(
         }
         
     except DocumentProcessingError as e:
-        logger.error(
+        logger.bind(tag=LogTag.TASK.value).error(
             "Document processing failed",
             storage_path=storage_path,
             collection=collection,
@@ -137,7 +137,7 @@ def process_document_task(
         # Don't retry on validation/processing errors
         raise
     except Exception as e:
-        logger.error(
+        logger.bind(tag=LogTag.TASK.value).error(
             "Unexpected error in document processing task",
             storage_path=storage_path,
             collection=collection,
@@ -175,7 +175,7 @@ def delete_document_task(
         Dictionary with deletion results
     """
     try:
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Starting document deletion task",
             collection=collection,
             filename=filename,
@@ -191,7 +191,7 @@ def delete_document_task(
         # Delete vectors will be handled by a separate task or endpoint
         # to avoid circular dependencies
         
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Document deletion completed",
             collection=collection,
             filename=filename,
@@ -206,7 +206,7 @@ def delete_document_task(
         }
         
     except Exception as e:
-        logger.error(
+        logger.bind(tag=LogTag.TASK.value).error(
             "Error in document deletion task",
             collection=collection,
             filename=filename,

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import AgentError
 
 
@@ -197,39 +197,78 @@ class RetrievalTool(Tool):
             top_k = kwargs.get("top_k", 5)
             score_threshold = kwargs.get("score_threshold", 0.0)
             
-            logger.info(
-                "Executing retrieval tool",
+            logger.bind(tag=LogTag.RETRIEVAL.value).info(
+                "Starting document retrieval",
                 query=query[:100],
+                query_length=len(query),
                 collection=collection,
-                top_k=top_k
+                top_k=top_k,
+                score_threshold=score_threshold
             )
             
             # Generate query embedding
+            embedding_start = time.time()
             query_embedding = self.embedding_service.generate_embedding(query)
+            embedding_time = time.time() - embedding_start
+            
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
+                "Query embedding generated",
+                embedding_dimension=len(query_embedding),
+                embedding_time=f"{embedding_time:.4f}s"
+            )
             
             # Search vector store
+            search_start = time.time()
             results = self.vector_store.search(
                 collection_name=collection,
                 query_vector=query_embedding,
                 top_k=top_k,
                 score_threshold=score_threshold
             )
+            search_time = time.time() - search_start
+            
+            logger.bind(tag=LogTag.VECTOR_SEARCH.value).info(
+                "Vector search completed",
+                results_count=len(results),
+                search_time=f"{search_time:.4f}s"
+            )
             
             # Format results
             formatted_results = []
-            for result in results:
+            for idx, result in enumerate(results):
+                text = result.get("payload", {}).get("text", "")
+                score = result.get("score", 0)
+                doc_id = result.get("id", "unknown")
+                
                 formatted_results.append({
-                    "text": result.get("payload", {}).get("text", ""),
-                    "score": result.get("score", 0),
+                    "text": text,
+                    "score": score,
                     "metadata": result.get("payload", {})
                 })
+                
+                # Log each retrieved document
+                logger.bind(tag=LogTag.RETRIEVAL.value).info(
+                    f"Retrieved document {idx + 1}/{len(results)}",
+                    document_id=str(doc_id),
+                    score=f"{score:.4f}",
+                    text_preview=text[:150] + "..." if len(text) > 150 else text,
+                    text_length=len(text)
+                )
             
             execution_time = time.time() - start_time
             
-            logger.info(
-                "Retrieval tool executed successfully",
+            # Calculate average score
+            avg_score = sum(r.get("score", 0) for r in formatted_results) / len(formatted_results) if formatted_results else 0.0
+            
+            logger.bind(tag=LogTag.RETRIEVAL.value).info(
+                "Retrieval tool completed successfully",
                 results_count=len(formatted_results),
-                execution_time=f"{execution_time:.4f}s"
+                avg_score=f"{avg_score:.4f}",
+                max_score=f"{max((r.get('score', 0) for r in formatted_results), default=0.0):.4f}",
+                min_score=f"{min((r.get('score', 0) for r in formatted_results), default=0.0):.4f}",
+                embedding_time=f"{embedding_time:.4f}s",
+                search_time=f"{search_time:.4f}s",
+                total_time=f"{execution_time:.4f}s"
             )
             
             return ToolResult(
@@ -241,13 +280,24 @@ class RetrievalTool(Tool):
                 metadata={
                     "execution_time": execution_time,
                     "top_k": top_k,
-                    "collection": collection
+                    "collection": collection,
+                    "avg_score": avg_score,
+                    "embedding_time": embedding_time,
+                    "search_time": search_time
                 }
             )
             
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error("Retrieval tool failed", error=str(e))
+            logger.bind(tag=LogTag.RETRIEVAL.value).error(
+                "Retrieval tool failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                query=query[:100] if 'query' in locals() else "unknown",
+                collection=collection if 'collection' in locals() else "unknown",
+                execution_time=f"{execution_time:.4f}s",
+                exc_info=True
+            )
             return ToolResult(
                 success=False,
                 data=None,
@@ -282,7 +332,7 @@ class CalculatorTool(Tool):
             self.validate_parameters(kwargs)
             expression = kwargs["expression"]
             
-            logger.info("Executing calculator tool", expression=expression)
+            logger.bind(tag=LogTag.TOOL.value).info("Executing calculator tool", expression=expression)
             
             # Safe evaluation using eval with restricted globals
             allowed_names = {
@@ -300,7 +350,7 @@ class CalculatorTool(Tool):
             
             execution_time = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.TOOL.value).info(
                 "Calculator tool executed successfully",
                 result=result,
                 execution_time=f"{execution_time:.4f}s"
@@ -314,7 +364,7 @@ class CalculatorTool(Tool):
             
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error("Calculator tool failed", expression=kwargs.get("expression"), error=str(e))
+            logger.bind(tag=LogTag.TOOL.value).error("Calculator tool failed", expression=kwargs.get("expression"), error=str(e))
             return ToolResult(
                 success=False,
                 data=None,
@@ -363,7 +413,7 @@ class WebSearchTool(Tool):
             query = kwargs["query"]
             num_results = kwargs.get("num_results", 5)
             
-            logger.info("Executing web search tool", query=query)
+            logger.bind(tag=LogTag.TOOL.value).info("Executing web search tool", query=query)
             
             # Note: This is a placeholder. In production, integrate with actual search APIs
             # like Google Custom Search, Bing Search, or Tavily API
@@ -377,7 +427,7 @@ class WebSearchTool(Tool):
             
             execution_time = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.TOOL.value).info(
                 "Web search tool executed",
                 results_count=len(results),
                 execution_time=f"{execution_time:.4f}s"
@@ -395,7 +445,7 @@ class WebSearchTool(Tool):
             
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error("Web search tool failed", error=str(e))
+            logger.bind(tag=LogTag.TOOL.value).error("Web search tool failed", error=str(e))
             return ToolResult(
                 success=False,
                 data=None,
@@ -444,7 +494,7 @@ class SummaryTool(Tool):
             text = kwargs["text"]
             max_length = kwargs.get("max_length", 200)
             
-            logger.info(
+            logger.bind(tag=LogTag.TOOL.value).info(
                 "Executing summary tool",
                 text_length=len(text),
                 max_length=max_length
@@ -455,7 +505,7 @@ class SummaryTool(Tool):
             
             execution_time = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.TOOL.value).info(
                 "Summary tool executed successfully",
                 original_length=len(text),
                 summary_length=len(summary),
@@ -474,7 +524,7 @@ class SummaryTool(Tool):
             
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error("Summary tool failed", error=str(e))
+            logger.bind(tag=LogTag.TOOL.value).error("Summary tool failed", error=str(e))
             return ToolResult(
                 success=False,
                 data=None,

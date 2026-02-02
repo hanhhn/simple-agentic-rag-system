@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import FileStorageError, FileNotFoundError as CoreFileNotFoundError
 from src.core.config import get_config
 
@@ -47,7 +47,7 @@ class StorageManager:
         
         self.storage_path.mkdir(parents=True, exist_ok=True)
         
-        logger.info("Storage manager initialized", storage_path=str(self.storage_path))
+        logger.bind(tag=LogTag.STORAGE.value).info("Storage manager initialized", storage_path=str(self.storage_path))
     
     def _get_collection_path(self, collection_name: str) -> Path:
         """
@@ -98,7 +98,7 @@ class StorageManager:
         start_time = time.time()
         
         try:
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Starting file save",
                 filename=filename,
                 collection=collection_name,
@@ -114,7 +114,7 @@ class StorageManager:
             check_start = time.time()
             if filepath.exists() and not overwrite:
                 elapsed = time.time() - start_time
-                logger.warning(
+                logger.bind(tag=LogTag.STORAGE.value).warning(
                     "File already exists",
                     filepath=str(filepath),
                     elapsed_time=f"{elapsed:.4f}s"
@@ -132,7 +132,7 @@ class StorageManager:
             
             total_elapsed = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "File saved successfully",
                 filepath=str(filepath),
                 filename=filename,
@@ -149,7 +149,7 @@ class StorageManager:
             
         except FileStorageError:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.STORAGE.value).error(
                 "File save failed (FileStorageError)",
                 filename=filename,
                 elapsed_time=f"{elapsed:.4f}s"
@@ -157,7 +157,7 @@ class StorageManager:
             raise
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.STORAGE.value).error(
                 "Failed to save file",
                 filename=filename,
                 collection=collection_name,
@@ -206,7 +206,7 @@ class StorageManager:
             
             content = filepath.read_bytes()
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "File retrieved successfully",
                 filepath=str(filepath),
                 size_bytes=len(content),
@@ -218,7 +218,7 @@ class StorageManager:
         except CoreFileNotFoundError:
             raise
         except Exception as e:
-            logger.error("Failed to retrieve file", filename=filename, error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to retrieve file", filename=filename, error=str(e))
             raise FileStorageError(
                 f"Failed to retrieve file '{filename}': {str(e)}",
                 details={"filename": filename, "error": str(e)}
@@ -252,7 +252,7 @@ class StorageManager:
             
             filepath.unlink()
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "File deleted successfully",
                 filepath=str(filepath),
                 collection=collection_name
@@ -261,7 +261,7 @@ class StorageManager:
         except CoreFileNotFoundError:
             raise
         except Exception as e:
-            logger.error("Failed to delete file", filename=filename, error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to delete file", filename=filename, error=str(e))
             raise FileStorageError(
                 f"Failed to delete file '{filename}': {str(e)}",
                 details={"filename": filename, "error": str(e)}
@@ -290,7 +290,7 @@ class StorageManager:
                 if item.is_file():
                     files.append(item.name)
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Listed files in collection",
                 collection=collection_name,
                 count=len(files)
@@ -299,7 +299,7 @@ class StorageManager:
             return sorted(files)
             
         except Exception as e:
-            logger.error("Failed to list files", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to list files", collection=collection_name, error=str(e))
             raise FileStorageError(
                 f"Failed to list files: {str(e)}",
                 details={"collection": collection_name, "error": str(e)}
@@ -325,19 +325,19 @@ class StorageManager:
             if collection_path.exists():
                 shutil.rmtree(collection_path)
                 
-                logger.info(
+                logger.bind(tag=LogTag.STORAGE.value).info(
                     "Collection deleted successfully",
                     collection=collection_name,
                     path=str(collection_path)
                 )
             else:
-                logger.warning(
+                logger.bind(tag=LogTag.STORAGE.value).warning(
                     "Collection does not exist",
                     collection=collection_name
                 )
                 
         except Exception as e:
-            logger.error("Failed to delete collection", collection=collection_name, error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to delete collection", collection=collection_name, error=str(e))
             raise FileStorageError(
                 f"Failed to delete collection '{collection_name}': {str(e)}",
                 details={"collection": collection_name, "error": str(e)}
@@ -362,7 +362,7 @@ class StorageManager:
                 if item.is_dir() and not item.name.startswith('.'):
                     collections.append(item.name)
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Listed collections",
                 count=len(collections)
             )
@@ -370,7 +370,7 @@ class StorageManager:
             return sorted(collections)
             
         except Exception as e:
-            logger.error("Failed to list collections", error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to list collections", error=str(e))
             raise FileStorageError(
                 f"Failed to list collections: {str(e)}",
                 details={"error": str(e)}
@@ -410,7 +410,7 @@ class StorageManager:
                 "storage_path": str(self.storage_path)
             }
             
-            logger.info(
+            logger.bind(tag=LogTag.STORAGE.value).info(
                 "Storage info retrieved",
                 **info
             )
@@ -418,7 +418,7 @@ class StorageManager:
             return info
             
         except Exception as e:
-            logger.error("Failed to get storage info", error=str(e))
+            logger.bind(tag=LogTag.STORAGE.value).error("Failed to get storage info", error=str(e))
             raise FileStorageError(
                 f"Failed to get storage info: {str(e)}",
                 details={"error": str(e)}

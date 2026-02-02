@@ -6,7 +6,7 @@ from typing import List
 
 import PyPDF2
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import DocumentParseError
 from src.parsers.base import Parser
 
@@ -63,7 +63,7 @@ class PdfParser(Parser):
         # Validate file
         self.validate_file(path)
         
-        logger.info("Parsing PDF file", filepath=str(path))
+        logger.bind(tag=LogTag.DOCUMENT.value).info("Parsing PDF file", filepath=str(path))
         
         try:
             # Open PDF file
@@ -72,7 +72,7 @@ class PdfParser(Parser):
                 
                 # Get number of pages
                 num_pages = len(reader.pages)
-                logger.info("PDF file opened", filepath=str(path), page_count=num_pages)
+                logger.bind(tag=LogTag.DOCUMENT.value).info("PDF file opened", filepath=str(path), page_count=num_pages)
                 
                 # Extract text from each page
                 pages_text = []
@@ -82,21 +82,21 @@ class PdfParser(Parser):
                         
                         if page_text:
                             pages_text.append(page_text)
-                            logger.info(
+                            logger.bind(tag=LogTag.DOCUMENT.value).info(
                                 "Extracted text from page",
                                 filepath=str(path),
                                 page=page_num,
                                 char_count=len(page_text)
                             )
                         else:
-                            logger.warning(
+                            logger.bind(tag=LogTag.DOCUMENT.value).warning(
                                 "No text extracted from page (possibly image-only)",
                                 filepath=str(path),
                                 page=page_num
                             )
                             
                     except Exception as e:
-                        logger.error(
+                        logger.bind(tag=LogTag.DOCUMENT.value).error(
                             "Failed to extract text from page",
                             filepath=str(path),
                             page=page_num,
@@ -111,7 +111,7 @@ class PdfParser(Parser):
                     # Clean up the text
                     full_text = self._clean_text(full_text)
                     
-                    logger.info(
+                    logger.bind(tag=LogTag.DOCUMENT.value).info(
                         "Successfully parsed PDF file",
                         filepath=str(path),
                         total_pages=len(pages_text),
@@ -120,7 +120,7 @@ class PdfParser(Parser):
                     
                     return full_text
                 else:
-                    logger.warning("No text extracted from PDF (possibly image-only)", filepath=str(path))
+                    logger.bind(tag=LogTag.DOCUMENT.value).warning("No text extracted from PDF (possibly image-only)", filepath=str(path))
                     return ""
                     
         except PyPDF2.PdfReadError as e:

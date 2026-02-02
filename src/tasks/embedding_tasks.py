@@ -7,7 +7,7 @@ and vector storage operations.
 from typing import List, Dict, Any, Optional
 
 from src.tasks.celery_app import celery_app
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import EmbeddingError, VectorStoreError
 from src.services.embedding_service import EmbeddingService
 from src.services.vector_store import VectorStore
@@ -54,7 +54,7 @@ def generate_embeddings_task(
         VectorStoreError: If vector storage fails
     """
     try:
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Starting embedding generation task",
             collection=collection,
             chunk_count=len(chunks_data),
@@ -64,7 +64,7 @@ def generate_embeddings_task(
         )
 
         if not chunks_data:
-            logger.warning("No chunks to process", task_id=self.request.id)
+            logger.bind(tag=LogTag.TASK.value).warning("No chunks to process", task_id=self.request.id)
             return {
                 "success": True,
                 "task_id": self.request.id,
@@ -76,13 +76,13 @@ def generate_embeddings_task(
         # Validate chunks data
         for i, chunk in enumerate(chunks_data):
             if not isinstance(chunk, dict):
-                logger.error(
+                logger.bind(tag=LogTag.TASK.value).error(
                     f"Invalid chunk at index {i}: not a dictionary",
                     task_id=self.request.id
                 )
                 raise EmbeddingError(f"Chunk at index {i} is not a dictionary")
             if "text" not in chunk or not chunk["text"]:
-                logger.error(
+                logger.bind(tag=LogTag.TASK.value).error(
                     f"Invalid chunk at index {i}: missing or empty text",
                     task_id=self.request.id
                 )
@@ -93,7 +93,7 @@ def generate_embeddings_task(
             embedding_service = EmbeddingService(model_name=model_name)
             vector_store = VectorStore()
         except Exception as e:
-            logger.error(
+            logger.bind(tag=LogTag.TASK.value).error(
                 "Failed to initialize services",
                 error=str(e),
                 error_type=type(e).__name__,
@@ -106,7 +106,7 @@ def generate_embeddings_task(
 
         # Validate that we have text to embed
         if not chunk_texts or all(not text.strip() for text in chunk_texts):
-            logger.error(
+            logger.bind(tag=LogTag.TASK.value).error(
                 "No valid text content found in chunks",
                 chunk_count=len(chunk_texts),
                 task_id=self.request.id
@@ -120,7 +120,7 @@ def generate_embeddings_task(
                 batch_size=batch_size
             )
         except Exception as e:
-            logger.error(
+            logger.bind(tag=LogTag.TASK.value).error(
                 "Failed to generate embeddings",
                 error=str(e),
                 error_type=type(e).__name__,
@@ -131,7 +131,7 @@ def generate_embeddings_task(
 
         # Validate embeddings output
         if not embeddings:
-            logger.error(
+            logger.bind(tag=LogTag.TASK.value).error(
                 "Embeddings generation returned empty list",
                 chunk_count=len(chunk_texts),
                 task_id=self.request.id
@@ -139,7 +139,7 @@ def generate_embeddings_task(
             raise EmbeddingError("Embeddings generation returned empty list")
 
         if len(embeddings) != len(chunk_texts):
-            logger.error(
+            logger.bind(tag=LogTag.TASK.value).error(
                 "Embeddings count mismatch",
                 expected=len(chunk_texts),
                 actual=len(embeddings),
@@ -149,7 +149,7 @@ def generate_embeddings_task(
                 f"Embeddings count mismatch: expected {len(chunk_texts)}, got {len(embeddings)}"
             )
 
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Embeddings generated",
             collection=collection,
             chunk_count=len(chunks_data),
@@ -163,7 +163,7 @@ def generate_embeddings_task(
                 collection_name=collection,
                 dimension=embedding_service.get_dimension()
             )
-            logger.info(
+            logger.bind(tag=LogTag.TASK.value).info(
                 "Collection created",
                 collection=collection,
                 dimension=embedding_service.get_dimension()
@@ -189,7 +189,7 @@ def generate_embeddings_task(
             payloads=payloads
         )
         
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Embedding generation and storage completed",
             collection=collection,
             chunk_count=len(chunks_data),
@@ -231,7 +231,7 @@ def generate_embeddings_task(
         )
         # Retry on unexpected errors (e.g., network issues)
         if self.request.retries < self.max_retries:
-            logger.info(
+            logger.bind(tag=LogTag.TASK.value).info(
                 "Retrying embedding generation task",
                 attempt=self.request.retries + 1,
                 max_retries=self.max_retries,
@@ -239,7 +239,7 @@ def generate_embeddings_task(
             )
             raise self.retry(exc=e, countdown=self.default_retry_delay * (2 ** self.request.retries))
         else:
-            logger.error(
+            logger.bind(tag=LogTag.TASK.value).error(
                 "Max retries exceeded for embedding generation task",
                 collection=collection,
                 task_id=self.request.id
@@ -272,7 +272,7 @@ def delete_vectors_task(
         Dictionary with deletion results
     """
     try:
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Starting vector deletion task",
             collection=collection,
             filter_criteria=filter_criteria,
@@ -287,7 +287,7 @@ def delete_vectors_task(
             payload_filter=filter_criteria
         )
         
-        logger.info(
+        logger.bind(tag=LogTag.TASK.value).info(
             "Vector deletion completed",
             collection=collection,
             filter_criteria=filter_criteria,

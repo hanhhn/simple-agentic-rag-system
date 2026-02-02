@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 import time
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import AgentError
 from src.agents.tool import Tool, ToolResult, ToolCategory
 from src.agents.memory import Memory
@@ -100,7 +100,7 @@ class BaseAgent(ABC):
                 self.tools_by_category[tool.category] = []
             self.tools_by_category[tool.category].append(tool)
         
-        logger.info(
+        logger.bind(tag=LogTag.AGENT.value).info(
             "Agent initialized",
             tools_count=len(tools),
             categories=[cat.value for cat in self.tools_by_category.keys()],
@@ -143,7 +143,7 @@ class BaseAgent(ABC):
             ToolResult with execution outcome
         """
         if tool_name not in self.tools:
-            logger.error("Tool not found", tool_name=tool_name, available=list(self.tools.keys()))
+            logger.bind(tag=LogTag.TOOL.value).error("Tool not found", tool_name=tool_name, available=list(self.tools.keys()))
             return ToolResult(
                 success=False,
                 data=None,
@@ -152,7 +152,7 @@ class BaseAgent(ABC):
         
         tool = self.tools[tool_name]
         
-        logger.info(
+        logger.bind(tag=LogTag.TOOL.value).info(
             "Using tool",
             tool_name=tool_name,
             parameters=list(kwargs.keys())
@@ -162,7 +162,7 @@ class BaseAgent(ABC):
             result = await tool.execute(**kwargs)
             
             if self.verbose:
-                logger.info(
+                logger.bind(tag=LogTag.TOOL.value).info(
                     "Tool executed",
                     tool_name=tool_name,
                     success=result.success,
@@ -172,7 +172,7 @@ class BaseAgent(ABC):
             return result
             
         except Exception as e:
-            logger.error("Tool execution failed", tool_name=tool_name, error=str(e))
+            logger.bind(tag=LogTag.TOOL.value).error("Tool execution failed", tool_name=tool_name, error=str(e))
             return ToolResult(
                 success=False,
                 data=None,
@@ -226,7 +226,7 @@ class BaseAgent(ABC):
             self.tools_by_category[tool.category] = []
         self.tools_by_category[tool.category].append(tool)
         
-        logger.info("Tool added to agent", tool_name=tool.name)
+        logger.bind(tag=LogTag.TOOL.value).info("Tool added to agent", tool_name=tool.name)
     
     def remove_tool(self, tool_name: str) -> bool:
         """
@@ -245,7 +245,7 @@ class BaseAgent(ABC):
         del self.tools[tool_name]
         self.tools_by_category[tool.category].remove(tool)
         
-        logger.info("Tool removed from agent", tool_name=tool_name)
+        logger.bind(tag=LogTag.TOOL.value).info("Tool removed from agent", tool_name=tool_name)
         return True
     
     async def think(
@@ -295,4 +295,4 @@ class BaseAgent(ABC):
     def clear_memory(self) -> None:
         """Clear agent memory."""
         self.memory.clear()
-        logger.info("Agent memory cleared")
+        logger.bind(tag=LogTag.MEMORY.value).info("Agent memory cleared")

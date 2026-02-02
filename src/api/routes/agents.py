@@ -3,7 +3,7 @@ Agent API endpoints for agentic RAG.
 """
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import AgentError, ValidationError
 from src.api.models.common import SuccessResponse, ErrorResponse
 from src.api.dependencies import get_llm_service, get_vector_store, get_embedding_service
@@ -78,9 +78,10 @@ async def agent_query(
         if agent_type not in ["react"]:
             raise ValidationError(f"Unknown agent type: {agent_type}")
         
-        logger.info(
-            "Agent query request",
+        logger.bind(tag=LogTag.API.value).info(
+            "Agent query request received",
             query=query[:100],
+            query_length=len(query),
             collection=collection,
             agent_type=agent_type,
             temperature=temperature,
@@ -88,6 +89,7 @@ async def agent_query(
         )
         
         # Create agent service
+        logger.bind(tag=LogTag.API.value).info("Creating agent service")
         agent_service = AgentService(
             llm_service=llm_service,
             vector_store=vector_store,
@@ -97,11 +99,20 @@ async def agent_query(
         )
         
         # Execute query
+        logger.bind(tag=LogTag.API.value).info("Executing agent query")
         result = await agent_service.query(
             query=query,
             collection=collection,
             agent_type=agent_type,
             enable_reflection=enable_reflection
+        )
+        
+        logger.bind(tag=LogTag.API.value).info(
+            "Agent query response prepared",
+            success=result.get("success", False),
+            answer_length=len(result.get("answer", "")) if result.get("answer") else 0,
+            actions_count=len(result.get("actions", [])),
+            confidence=result.get("confidence", 0.0)
         )
         
         if not result["success"]:
@@ -121,19 +132,19 @@ async def agent_query(
         )
         
     except ValidationError as e:
-        logger.error("Agent query validation failed", error=str(e))
+        logger.bind(tag=LogTag.VALIDATION.value).error("Agent query validation failed", error=str(e))
         raise HTTPException(
             status_code=400,
             detail=e.to_dict()
         )
     except AgentError as e:
-        logger.error("Agent execution error", error=str(e))
+        logger.bind(tag=LogTag.AGENT.value).error("Agent execution error", error=str(e))
         raise HTTPException(
             status_code=500,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Unexpected error in agent query", error=str(e))
+        logger.bind(tag=LogTag.ERROR.value).error("Unexpected error in agent query", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -167,7 +178,7 @@ async def plan_query(
         if not query or not query.strip():
             raise ValidationError("Query cannot be empty")
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Query plan request",
             query=query[:100],
             collection=collection
@@ -203,13 +214,13 @@ async def plan_query(
         )
         
     except ValidationError as e:
-        logger.error("Query plan validation failed", error=str(e))
+        logger.bind(tag=LogTag.VALIDATION.value).error("Query plan validation failed", error=str(e))
         raise HTTPException(
             status_code=400,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Unexpected error in query planning", error=str(e))
+        logger.bind(tag=LogTag.ERROR.value).error("Unexpected error in query planning", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -253,7 +264,7 @@ async def list_tools(
         )
         
     except Exception as e:
-        logger.error("Failed to list tools", error=str(e))
+        logger.bind(tag=LogTag.ERROR.value).error("Failed to list tools", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -294,7 +305,7 @@ async def clear_agent_memory(
         )
         
     except Exception as e:
-        logger.error("Failed to clear memory", error=str(e))
+        logger.bind(tag=LogTag.ERROR.value).error("Failed to clear memory", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={

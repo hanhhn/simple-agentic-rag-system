@@ -10,11 +10,12 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from src.core.logging import configure_logging, get_logger
+from src.core.logging import configure_logging, get_logger, LogTag
 from src.core.config import get_config
 from src.api.routes import health, documents, query, collections, tasks, models, agents, conversations
 from src.api.middleware import logging as logging_middleware
 from src.api.middleware import rate_limit as rate_limit_middleware
+from src.api.middleware import tracing as tracing_middleware
 
 # Configure logging
 configure_logging()
@@ -116,15 +117,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add tracing middleware (must be first to set trace_id in context)
+tracing_middleware.add_tracing_middleware(app)
+
 # Add logging middleware
 logging_middleware.add_logging_middleware(app)
 
 # Add rate limiting middleware (if enabled)
 if config.security.rate_limit_enabled:
     rate_limit_middleware.add_rate_limit_middleware(app)
-    logger.info("Rate limiting middleware enabled")
+    logger.bind(tag=LogTag.MIDDLEWARE.value).info("Rate limiting middleware enabled")
 else:
-    logger.info("Rate limiting middleware disabled")
+    logger.bind(tag=LogTag.MIDDLEWARE.value).info("Rate limiting middleware disabled")
 
 # Include routers
 app.include_router(health.router)
@@ -158,8 +162,8 @@ if frontend_dist.exists():
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
-    logger.info("Application starting up", app_name=config.app.app_name, version=config.app.api_version)
-    logger.info("Prometheus metrics enabled at /metrics")
+    logger.bind(tag=LogTag.STARTUP.value).info("Application starting up", app_name=config.app.app_name, version=config.app.api_version)
+    logger.bind(tag=LogTag.SYSTEM.value).info("Prometheus metrics enabled at /metrics")
     
     # Initialize necessary services
     # Services are lazily loaded via dependencies, so no explicit init needed
@@ -168,7 +172,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Run on application shutdown."""
-    logger.info("Application shutting down")
+    logger.bind(tag=LogTag.SHUTDOWN.value).info("Application shutting down")
 
 
 @app.exception_handler(Exception)
@@ -183,7 +187,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     Returns:
         JSON response with error details
     """
-    logger.error(
+    logger.bind(tag=LogTag.ERROR.value).error(
         "Unhandled exception",
         path=request.url.path,
         method=request.method,
@@ -249,7 +253,7 @@ async def serve_spa(full_path: str, request: Request):
 if __name__ == "__main__":
     import uvicorn
     
-    logger.info(
+    logger.bind(tag=LogTag.STARTUP.value).info(
         "Starting server",
         host=config.app.app_host,
         port=config.app.app_port,

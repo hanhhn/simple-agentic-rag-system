@@ -4,7 +4,7 @@ Prompt builder for constructing LLM prompts.
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import PromptError
 
 
@@ -90,7 +90,7 @@ Assistant:"""
                 question=question
             )
             
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Built RAG prompt",
                 question=question[:100],
                 context_length=len(context_text)
@@ -147,7 +147,7 @@ Assistant:"""
                 history=history_section
             )
             
-            logger.info(
+            logger.bind(tag=LogTag.LLM.value).info(
                 "Built chat prompt",
                 question=question[:100],
                 has_context=bool(contexts),
@@ -180,7 +180,7 @@ Text:
 
 Summary:"""
         
-        logger.info(
+        logger.bind(tag=LogTag.LLM.value).info(
             "Built summarization prompt",
             text_length=len(text),
             target_length=max_length
@@ -257,7 +257,7 @@ Answer:"""
                     details={"template_type": template_type}
                 )
             
-            logger.info("Loaded custom template", template_type=template_type, filepath=filepath)
+            logger.bind(tag=LogTag.LLM.value).info("Loaded custom template", template_type=template_type, filepath=filepath)
             
         except Exception as e:
             raise PromptError(

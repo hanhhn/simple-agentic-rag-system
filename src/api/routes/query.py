@@ -3,7 +3,7 @@ Query and RAG endpoints.
 """
 from fastapi import APIRouter, Depends, HTTPException
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import ServiceError, ValidationError
 from src.api.models.query import QueryRequest, QueryResponse
 from src.api.dependencies import get_query_processor
@@ -65,7 +65,7 @@ async def process_query(
         validator.validate_query(request.query)
         validator.validate_top_k(request.top_k)
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Processing query request",
             query=request.query[:100],
             collection=request.collection,
@@ -113,7 +113,7 @@ async def process_query(
             use_rag=request.use_rag
         )
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Query processed successfully",
             query=request.query[:100],
             has_answer=bool(result["answer"]),
@@ -123,19 +123,19 @@ async def process_query(
         return response
         
     except ValidationError as e:
-        logger.error("Query validation failed", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Query validation failed", error=str(e))
         raise HTTPException(
             status_code=400,
             detail=e.to_dict()
         )
     except ServiceError as e:
-        logger.error("Query service error", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Query service error", error=str(e))
         raise HTTPException(
             status_code=500,
             detail=e.to_dict()
         )
     except Exception as e:
-        logger.error("Unexpected error during query processing", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Unexpected error during query processing", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={

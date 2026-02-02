@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 import time
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import AgentError
 
 
@@ -76,7 +76,7 @@ class Reflector:
         self.enable_self_correction = enable_self_correction
         self.min_acceptable_score = min_acceptable_score
         
-        logger.info(
+        logger.bind(tag=LogTag.REFLECTION.value).info(
             "Reflector initialized",
             enable_self_correction=enable_self_correction,
             min_acceptable_score=min_acceptable_score
@@ -105,11 +105,15 @@ class Reflector:
         """
         start_time = time.time()
         
-        logger.info(
+        logger.bind(tag=LogTag.REFLECTION.value).info(
             "Starting reflection",
             query=query[:100],
+            query_length=len(query),
             answer_length=len(answer),
-            has_retrieved_docs=len(retrieved_docs) > 0 if retrieved_docs else False
+            answer_preview=answer[:200],
+            has_retrieved_docs=len(retrieved_docs) > 0 if retrieved_docs else False,
+            retrieved_docs_count=len(retrieved_docs) if retrieved_docs else 0,
+            criteria_count=len(criteria_to_use)
         )
         
         # Build evaluation prompt
@@ -130,21 +134,38 @@ class Reflector:
         )
         
         # Get evaluation from LLM
+        eval_start = time.time()
         evaluation = await self._get_evaluation(prompt)
+        eval_time = time.time() - eval_start
+        
+        logger.bind(tag=LogTag.REFLECTION.value).info(
+            "LLM evaluation received",
+            evaluation_length=len(evaluation),
+            eval_time=f"{eval_time:.4f}s"
+        )
         
         # Parse evaluation
+        parse_start = time.time()
         result = self._parse_evaluation(evaluation)
+        parse_time = time.time() - parse_start
         
         # Determine if refinement is needed
         result.should_refine = result.overall_score < self.min_acceptable_score
         
         execution_time = time.time() - start_time
         
-        logger.info(
+        logger.bind(tag=LogTag.REFLECTION.value).info(
             "Reflection completed",
             overall_score=result.overall_score,
+            criterion_scores=result.criterion_scores,
             should_refine=result.should_refine,
-            execution_time=f"{execution_time:.4f}s"
+            min_acceptable_score=self.min_acceptable_score,
+            issues_count=len(result.issues),
+            suggestions_count=len(result.suggestions),
+            issues=result.issues[:3] if result.issues else [],
+            eval_time=f"{eval_time:.4f}s",
+            parse_time=f"{parse_time:.4f}s",
+            total_time=f"{execution_time:.4f}s"
         )
         
         return result
@@ -184,18 +205,21 @@ class Reflector:
             
             # If answer is good enough, return it
             if not reflection.should_refine:
-                logger.info(
-                    "Answer accepted",
+                logger.bind(tag=LogTag.REFLECTION.value).info(
+                    "Answer accepted after refinement",
                     refinement_count=refinement_count,
-                    score=reflection.overall_score
+                    final_score=reflection.overall_score,
+                    criterion_scores=reflection.criterion_scores
                 )
                 return current_answer, reflection
             
             # Refine the answer
-            logger.info(
+            logger.bind(tag=LogTag.REFLECTION.value).info(
                 "Refining answer",
                 iteration=refinement_count + 1,
-                issues=reflection.issues
+                current_score=reflection.overall_score,
+                issues=reflection.issues,
+                suggestions=reflection.suggestions[:3]
             )
             
             current_answer = await self._refine_answer(
@@ -216,10 +240,12 @@ class Reflector:
             retrieved_docs=retrieved_docs
         )
         
-        logger.warning(
+        logger.bind(tag=LogTag.REFLECTION.value).warning(
             "Max refinements reached",
             final_score=final_reflection.overall_score,
-            refinements=max_refinements
+            refinements=max_refinements,
+            final_criterion_scores=final_reflection.criterion_scores,
+            remaining_issues=final_reflection.issues
         )
         
         return current_answer, final_reflection
@@ -302,7 +328,7 @@ Be objective and specific in your evaluation. Respond with only the JSON, no add
             )
             return evaluation
         except Exception as e:
-            logger.error("Failed to get evaluation from LLM", error=str(e))
+            logger.bind(tag=LogTag.REFLECTION.value).error("Failed to get evaluation from LLM", error=str(e))
             raise AgentError(
                 f"Reflection evaluation failed: {str(e)}",
                 details={"error": str(e)}
@@ -331,7 +357,7 @@ Be objective and specific in your evaluation. Respond with only the JSON, no add
             )
             
         except Exception as e:
-            logger.error("Failed to parse evaluation", error=str(e))
+            logger.bind(tag=LogTag.REFLECTION.value).error("Failed to parse evaluation", error=str(e))
             # Return default moderate evaluation
             return ReflectionResult(
                 overall_score=0.5,
@@ -376,7 +402,7 @@ Provide the refined answer directly, without explanation."""
             )
             return refined
         except Exception as e:
-            logger.error("Failed to refine answer", error=str(e))
+            logger.bind(tag=LogTag.REFLECTION.value).error("Failed to refine answer", error=str(e))
             return current_answer
 
 
@@ -404,7 +430,7 @@ class SimpleReflector(Reflector):
         - Presence of retrieved documents
         - Answer structure
         """
-        logger.info("Using simple reflector")
+        logger.bind(tag=LogTag.REFLECTION.value).info("Using simple reflector")
         
         # Initialize scores
         scores = {

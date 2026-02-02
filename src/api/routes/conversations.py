@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from datetime import datetime
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import ValidationError
 from src.api.models.common import SuccessResponse, ErrorResponse
 from src.api.dependencies import get_llm_service, get_vector_store, get_embedding_service
@@ -93,7 +93,7 @@ async def create_conversation(
         )
         
     except Exception as e:
-        logger.error("Failed to create conversation", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to create conversation", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -143,7 +143,7 @@ async def list_conversations(
         )
         
     except Exception as e:
-        logger.error("Failed to list conversations", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to list conversations", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -185,7 +185,7 @@ async def get_conversation(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to get conversation", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get conversation", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -225,7 +225,7 @@ async def update_conversation(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to update conversation", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to update conversation", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -263,7 +263,7 @@ async def archive_conversation(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to archive conversation", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to archive conversation", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -303,7 +303,7 @@ async def delete_conversation(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to delete conversation", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to delete conversation", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -346,7 +346,7 @@ async def search_conversations(
         )
         
     except Exception as e:
-        logger.error("Failed to search conversations", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to search conversations", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -386,7 +386,7 @@ async def get_conversation_statistics(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to get conversation stats", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get conversation stats", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -435,7 +435,7 @@ async def export_conversation(
             detail={"success": False, "message": str(e)}
         )
     except Exception as e:
-        logger.error("Failed to export conversation", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to export conversation", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -481,7 +481,7 @@ async def import_conversation(
             detail={"success": False, "message": str(e)}
         )
     except Exception as e:
-        logger.error("Failed to import conversation", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to import conversation", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -509,7 +509,7 @@ async def get_all_tags(
         )
         
     except Exception as e:
-        logger.error("Failed to get tags", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get tags", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -544,7 +544,7 @@ async def cleanup_old_conversations(
         )
         
     except Exception as e:
-        logger.error("Failed to cleanup conversations", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to cleanup conversations", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -593,7 +593,7 @@ async def get_analytics_report(
             detail={"success": False, "message": f"Invalid time format: {str(e)}"}
         )
     except Exception as e:
-        logger.error("Failed to generate analytics report", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to generate analytics report", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -638,7 +638,7 @@ async def get_analytics_insights(
             detail={"success": False, "message": f"Invalid time format: {str(e)}"}
         )
     except Exception as e:
-        logger.error("Failed to get analytics insights", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get analytics insights", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -701,7 +701,7 @@ async def get_metric_summary(
             detail={"success": False, "message": f"Invalid time format: {str(e)}"}
         )
     except Exception as e:
-        logger.error("Failed to get metric summary", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get metric summary", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -776,7 +776,7 @@ async def get_metric_trend(
             detail={"success": False, "message": f"Invalid time format: {str(e)}"}
         )
     except Exception as e:
-        logger.error("Failed to analyze metric trend", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to analyze metric trend", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}
@@ -812,7 +812,7 @@ async def get_realtime_metrics(
         )
         
     except Exception as e:
-        logger.error("Failed to get realtime metrics", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get realtime metrics", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={"success": False, "message": str(e)}

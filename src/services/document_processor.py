@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import DocumentProcessingError
 from src.core.config import get_config
 from src.parsers.base import get_parser_factory
@@ -52,7 +52,7 @@ class DocumentProcessor:
         
         self.parser_factory = get_parser_factory()
         
-        logger.info(
+        logger.bind(tag=LogTag.DOCUMENT.value).info(
             "Document processor initialized",
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
@@ -83,7 +83,7 @@ class DocumentProcessor:
             file_size = filepath_obj.stat().st_size if filepath_obj.exists() else 0
             file_ext = filepath_obj.suffix.lower()
             
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Starting document parsing",
                 filepath=str(filepath),
                 file_size_bytes=file_size,
@@ -95,7 +95,7 @@ class DocumentProcessor:
             parser_start = time.time()
             parser = self.parser_factory.get_parser(filepath)
             parser_get_elapsed = time.time() - parser_start
-            logger.info("Parser selected", parser_type=type(parser).__name__, elapsed=f"{parser_get_elapsed:.6f}s")
+            logger.bind(tag=LogTag.DOCUMENT.value).info("Parser selected", parser_type=type(parser).__name__, elapsed=f"{parser_get_elapsed:.6f}s")
             
             # Parse document
             parse_start = time.time()
@@ -104,7 +104,7 @@ class DocumentProcessor:
             
             if not text:
                 elapsed = time.time() - start_time
-                logger.warning(
+                logger.bind(tag=LogTag.DOCUMENT.value).warning(
                     "Document contains no text content",
                     filepath=str(filepath),
                     elapsed_time=f"{elapsed:.4f}s"
@@ -116,7 +116,7 @@ class DocumentProcessor:
             
             total_elapsed = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Document parsed successfully",
                 filepath=str(filepath),
                 text_length=len(text),
@@ -129,7 +129,7 @@ class DocumentProcessor:
             
         except DocumentProcessingError:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.DOCUMENT.value).error(
                 "Document parsing failed (DocumentProcessingError)",
                 filepath=str(filepath),
                 elapsed_time=f"{elapsed:.4f}s"
@@ -137,7 +137,7 @@ class DocumentProcessor:
             raise
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.DOCUMENT.value).error(
                 "Failed to parse document",
                 filepath=str(filepath),
                 error=str(e),
@@ -176,7 +176,7 @@ class DocumentProcessor:
         start_time = time.time()
         
         try:
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Starting document chunking",
                 text_length=len(text),
                 chunk_size=self.chunk_size,
@@ -207,7 +207,7 @@ class DocumentProcessor:
             min_chunk_size = min((len(c.text) for c in chunks), default=0)
             max_chunk_size = max((len(c.text) for c in chunks), default=0)
             
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Document chunked successfully",
                 chunk_count=len(chunks),
                 avg_chunk_size=avg_chunk_size,
@@ -223,7 +223,7 @@ class DocumentProcessor:
             
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.DOCUMENT.value).error(
                 "Failed to chunk document",
                 error=str(e),
                 error_type=type(e).__name__,
@@ -262,7 +262,7 @@ class DocumentProcessor:
         start_time = time.time()
         
         try:
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Starting end-to-end document processing",
                 filepath=str(filepath),
                 has_metadata=metadata is not None
@@ -290,7 +290,7 @@ class DocumentProcessor:
             
             total_elapsed = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Document processed successfully",
                 filepath=str(filepath),
                 chunk_count=len(chunks),
@@ -305,7 +305,7 @@ class DocumentProcessor:
             
         except DocumentProcessingError:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.DOCUMENT.value).error(
                 "Document processing failed (DocumentProcessingError)",
                 filepath=str(filepath),
                 elapsed_time=f"{elapsed:.4f}s"
@@ -313,7 +313,7 @@ class DocumentProcessor:
             raise
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.DOCUMENT.value).error(
                 "Failed to process document",
                 filepath=str(filepath),
                 error=str(e),

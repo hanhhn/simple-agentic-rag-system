@@ -4,7 +4,7 @@ Embedding service for managing embedding generation.
 import time
 from typing import List, Optional
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import EmbeddingError
 from src.core.config import get_config
 from src.embedding.base import EmbeddingModel
@@ -57,7 +57,7 @@ class EmbeddingService:
         # This avoids issues with loading models in forked processes
         self._model: Optional[EmbeddingModel] = None
         
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "Embedding service initialized (lazy loading)",
             model=self.model_name,
             use_cache=use_cache
@@ -76,7 +76,7 @@ class EmbeddingService:
         """
         if self._model is None:
             self._model = self._load_model(self.model_name)
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Model loaded (lazy initialization)",
                 model=self.model_name,
                 dimension=self._model.get_dimension()
@@ -95,7 +95,7 @@ class EmbeddingService:
         Returns:
             Initialized Granite model
         """
-        logger.info("Loading Granite model", model=model_name)
+        logger.bind(tag=LogTag.EMBEDDING.value).info("Loading Granite model", model=model_name)
         # Enable lazy loading for multiprocessing safety
         return GraniteEmbeddingModel(model_name=model_name, lazy_load=True)
     
@@ -118,7 +118,7 @@ class EmbeddingService:
         start_time = time.time()
         use_cache = use_cache_override if use_cache_override is not None else self.use_cache
         
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "Generating single embedding",
             text_length=len(text),
             model=self.model_name,
@@ -133,7 +133,7 @@ class EmbeddingService:
             
             if cached_embedding:
                 total_elapsed = time.time() - start_time
-                logger.info(
+                logger.bind(tag=LogTag.EMBEDDING.value).info(
                     "Embedding cache hit",
                     text_length=len(text),
                     dimension=len(cached_embedding),
@@ -142,7 +142,7 @@ class EmbeddingService:
                 )
                 return cached_embedding
             
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Embedding cache miss",
                 text_length=len(text),
                 cache_lookup_time=f"{cache_elapsed:.6f}s"
@@ -162,7 +162,7 @@ class EmbeddingService:
             
             total_elapsed = time.time() - start_time
             
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Embedding generated successfully",
                 text_length=len(text),
                 dimension=len(embedding),
@@ -177,7 +177,7 @@ class EmbeddingService:
             
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.EMBEDDING.value).error(
                 "Failed to generate embedding",
                 text_preview=text[:100],
                 text_length=len(text),
@@ -220,7 +220,7 @@ class EmbeddingService:
         start_time = time.time()
         
         if not texts:
-            logger.info("No texts provided for batch embedding")
+            logger.bind(tag=LogTag.EMBEDDING.value).info("No texts provided for batch embedding")
             return []
         
         use_cache = use_cache_override if use_cache_override is not None else self.use_cache
@@ -228,7 +228,7 @@ class EmbeddingService:
         total_chars = sum(len(text) for text in texts)
         avg_length = total_chars / len(texts) if texts else 0
         
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "Starting batch embedding generation",
             count=len(texts),
             batch_size=batch_size,
@@ -248,7 +248,7 @@ class EmbeddingService:
             cache_hits = sum(1 for emb in cached_embeddings if emb is not None)
             cache_misses = len(texts) - cache_hits
             
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Cache lookup completed",
                 total=len(texts),
                 cache_hits=cache_hits,
@@ -289,7 +289,7 @@ class EmbeddingService:
                 
                 total_elapsed = time.time() - start_time
                 
-                logger.info(
+                logger.bind(tag=LogTag.EMBEDDING.value).info(
                     "Embeddings generated with cache",
                     total=len(texts),
                     cached=cache_hits,
@@ -305,7 +305,7 @@ class EmbeddingService:
             else:
                 # All cached
                 total_elapsed = time.time() - start_time
-                logger.info(
+                logger.bind(tag=LogTag.EMBEDDING.value).info(
                     "All embeddings from cache",
                     count=len(texts),
                     cache_lookup_time=f"{cache_elapsed:.4f}s",
@@ -321,7 +321,7 @@ class EmbeddingService:
                 
                 total_elapsed = time.time() - start_time
                 
-                logger.info(
+                logger.bind(tag=LogTag.EMBEDDING.value).info(
                     "Embeddings generated without cache",
                     count=len(texts),
                     batch_size=batch_size,
@@ -335,7 +335,7 @@ class EmbeddingService:
                 
             except Exception as e:
                 elapsed = time.time() - start_time
-                logger.error(
+                logger.bind(tag=LogTag.EMBEDDING.value).error(
                     "Failed to generate embeddings",
                     count=len(texts),
                     error=str(e),
@@ -379,7 +379,7 @@ class EmbeddingService:
             >>> service.save_cache()
         """
         self.cache.save()
-        logger.info("Embedding cache saved")
+        logger.bind(tag=LogTag.EMBEDDING.value).info("Embedding cache saved")
     
     def clear_cache(self) -> None:
         """
@@ -390,7 +390,7 @@ class EmbeddingService:
             >>> service.clear_cache()
         """
         self.cache.clear()
-        logger.info("Embedding cache cleared")
+        logger.bind(tag=LogTag.EMBEDDING.value).info("Embedding cache cleared")
     
     def get_cache_stats(self) -> dict:
         """

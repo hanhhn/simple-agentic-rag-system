@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 from collections import OrderedDict
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import EmbeddingCacheError
 
 
@@ -65,7 +65,7 @@ class EmbeddingCache:
         self._total_get_time = 0.0
         self._total_set_time = 0.0
         
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "EmbeddingCache initialized",
             cache_dir=str(self.cache_dir),
             cache_file=str(self.cache_file),
@@ -104,7 +104,7 @@ class EmbeddingCache:
         
         if not self.enabled:
             self._cache_misses += 1
-            logger.info("Cache is disabled, skipping cache lookup")
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Cache is disabled, skipping cache lookup")
             return None
         
         key = self._get_cache_key(text)
@@ -118,7 +118,7 @@ class EmbeddingCache:
             self._cache_hits += 1
             # Move to end for LRU (most recently used)
             self.cache.move_to_end(key)
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Cache hit",
                 cache_hit_rate=f"{self.get_cache_hit_rate():.2%}",
                 retrieval_time=f"{elapsed:.6f}s",
@@ -126,7 +126,7 @@ class EmbeddingCache:
             )
         else:
             self._cache_misses += 1
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Cache miss",
                 cache_hit_rate=f"{self.get_cache_hit_rate():.2%}",
                 lookup_time=f"{elapsed:.6f}s",
@@ -149,7 +149,7 @@ class EmbeddingCache:
         start_time = time.time()
         
         if not self.enabled:
-            logger.info("Cache is disabled, skipping cache set")
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Cache is disabled, skipping cache set")
             return
         
         key = self._get_cache_key(text)
@@ -157,10 +157,10 @@ class EmbeddingCache:
         # Update existing key or add new one
         if key in self.cache:
             self.cache.move_to_end(key)
-            logger.info("Updated existing cache entry", entries=len(self.cache))
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Updated existing cache entry", entries=len(self.cache))
         else:
             self.cache[key] = embedding
-            logger.info("Added new cache entry", entries=len(self.cache))
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Added new cache entry", entries=len(self.cache))
         
         # Evict oldest entries if cache is too large
         evicted = 0
@@ -169,7 +169,7 @@ class EmbeddingCache:
             evicted += 1
         
         if evicted > 0:
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "LRU eviction performed",
                 evicted_entries=evicted,
                 current_entries=len(self.cache),
@@ -209,7 +209,7 @@ class EmbeddingCache:
             return
         
         if len(texts) != len(embeddings):
-            logger.warning(
+            logger.bind(tag=LogTag.EMBEDDING.value).warning(
                 "Batch size mismatch in cache set",
                 texts_count=len(texts),
                 embeddings_count=len(embeddings)
@@ -233,7 +233,7 @@ class EmbeddingCache:
         self._cache_misses = 0
         self._total_get_time = 0.0
         self._total_set_time = 0.0
-        logger.info(
+        logger.bind(tag=LogTag.EMBEDDING.value).info(
             "Embedding cache cleared",
             cleared_entries=count,
             cache_hit_rate_before_clear=f"{self.get_cache_hit_rate():.2%}"
@@ -252,7 +252,7 @@ class EmbeddingCache:
         try:
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.cache, f)
-            logger.info("Embedding cache saved", cache_file=str(self.cache_file))
+            logger.bind(tag=LogTag.EMBEDDING.value).info("Embedding cache saved", cache_file=str(self.cache_file))
         except Exception as e:
             raise EmbeddingCacheError(
                 f"Failed to save cache: {str(e)}",
@@ -269,13 +269,13 @@ class EmbeddingCache:
         try:
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 self.cache = json.load(f)
-            logger.info(
+            logger.bind(tag=LogTag.EMBEDDING.value).info(
                 "Embedding cache loaded",
                 cache_file=str(self.cache_file),
                 entries=len(self.cache)
             )
         except json.JSONDecodeError as e:
-            logger.warning(
+            logger.bind(tag=LogTag.EMBEDDING.value).warning(
                 "Cache file is corrupted, starting with empty cache",
                 cache_file=str(self.cache_file),
                 error=str(e)

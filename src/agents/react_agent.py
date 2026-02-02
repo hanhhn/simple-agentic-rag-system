@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import time
 import json
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import AgentError
 from src.agents.base_agent import BaseAgent, AgentAction, AgentResponse
 from src.agents.tool import Tool, ToolResult
@@ -73,7 +73,7 @@ class ReActAgent(BaseAgent):
         else:
             self.reflector = reflector
         
-        logger.info(
+        logger.bind(tag=LogTag.REACT.value).info(
             "ReAct agent initialized",
             tools_count=len(tools),
             max_iterations=max_iterations,
@@ -102,10 +102,14 @@ class ReActAgent(BaseAgent):
         """
         start_time = time.time()
         
-        logger.info(
+        logger.bind(tag=LogTag.REACT.value).info(
             "ReAct agent started",
             query=query[:100],
-            collection=collection
+            query_length=len(query),
+            collection=collection,
+            max_iterations=self.max_iterations,
+            temperature=self.temperature,
+            enable_reflection=self.enable_reflection
         )
         
         # Prepare context
@@ -129,26 +133,41 @@ class ReActAgent(BaseAgent):
         while iteration < self.max_iterations:
             iteration += 1
             
-            logger.info(
-                "ReAct iteration",
+            logger.bind(tag=LogTag.REACT.value).info(
+                "ReAct iteration started",
                 iteration=iteration,
-                max_iterations=self.max_iterations
+                max_iterations=self.max_iterations,
+                previous_actions_count=len(previous_actions)
             )
             
             # Step 1: Generate thought and action
+            llm_start = time.time()
             llm_response = self.llm_service.generate(
                 prompt,
                 temperature=self.temperature
             )
+            llm_time = time.time() - llm_start
+            
+            logger.bind(tag=LogTag.LLM.value).info(
+                "LLM reasoning step",
+                iteration=iteration,
+                llm_response_length=len(llm_response),
+                llm_time=f"{llm_time:.4f}s"
+            )
             
             # Parse thought and action
+            parse_start = time.time()
             thought, action = self._parse_react_response(llm_response)
+            parse_time = time.time() - parse_start
             
-            logger.info(
-                "ReAct step",
+            logger.bind(tag=LogTag.REACT.value).info(
+                "ReAct step parsed",
                 iteration=iteration,
-                thought=thought[:100] if thought else "None",
-                action=f"{action.get('tool')}({action.get('args')})" if action else "None"
+                thought=thought[:200] if thought else "None",
+                thought_length=len(thought) if thought else 0,
+                action_tool=action.get('tool') if action else "None",
+                action_args=action.get('args') if action else None,
+                parse_time=f"{parse_time:.4f}s"
             )
             
             response.intermediate_steps.append(
@@ -162,7 +181,11 @@ class ReActAgent(BaseAgent):
                 
                 # Apply reflection if enabled
                 if self.enable_reflection and self.reflector:
-                    logger.info("Applying reflection to final answer")
+                    logger.bind(tag=LogTag.REFLECTION.value).info(
+                        "Starting reflection on final answer",
+                        answer_length=len(final_answer),
+                        answer_preview=final_answer[:200]
+                    )
                     
                     # Collect retrieved documents for reflection context
                     retrieved_docs = []
@@ -171,6 +194,12 @@ class ReActAgent(BaseAgent):
                             if hasattr(agent_action.tool_output, 'data'):
                                 docs = agent_action.tool_output.data.get('documents', [])
                                 retrieved_docs.extend(docs)
+                    
+                    logger.bind(tag=LogTag.REFLECTION.value).info(
+                        "Reflection context prepared",
+                        retrieved_docs_count=len(retrieved_docs),
+                        actions_count=len(response.actions)
+                    )
                     
                     # Reflect on answer
                     reflection_result = await self.reflector.reflect(
@@ -185,7 +214,12 @@ class ReActAgent(BaseAgent):
                     
                     # If reflection suggests refinement and it's enabled
                     if reflection_result.should_refine:
-                        logger.info("Answer needs refinement based on reflection")
+                        logger.bind(tag=LogTag.REFLECTION.value).info(
+                            "Answer needs refinement",
+                            overall_score=reflection_result.overall_score,
+                            issues=reflection_result.issues,
+                            suggestions=reflection_result.suggestions
+                        )
                         
                         # Use reflector's refinement
                         refined_answer, final_reflection = await self.reflector.reflect_and_refine(
@@ -194,6 +228,13 @@ class ReActAgent(BaseAgent):
                             context=execution_context,
                             retrieved_docs=retrieved_docs,
                             max_refinements=2
+                        )
+                        
+                        logger.bind(tag=LogTag.REFLECTION.value).info(
+                            "Answer refined",
+                            original_length=len(final_answer),
+                            refined_length=len(refined_answer),
+                            final_score=final_reflection.overall_score
                         )
                         
                         response.answer = refined_answer
@@ -205,6 +246,11 @@ class ReActAgent(BaseAgent):
                         response.confidence = final_reflection.overall_score
                     else:
                         # Answer is good enough
+                        logger.bind(tag=LogTag.REFLECTION.value).info(
+                            "Answer accepted without refinement",
+                            overall_score=reflection_result.overall_score,
+                            confidence=reflection_result.overall_score
+                        )
                         response.answer = final_answer
                         response.confidence = reflection_result.overall_score
                 else:
@@ -222,7 +268,16 @@ class ReActAgent(BaseAgent):
             if collection and "collection" not in tool_args and tool_name == "retrieve_documents":
                 tool_args["collection"] = collection
             
+            logger.bind(tag=LogTag.TOOL.value).info(
+                "Executing tool",
+                iteration=iteration,
+                tool_name=tool_name,
+                tool_args=tool_args
+            )
+            
+            tool_start = time.time()
             tool_result = await self.use_tool(tool_name, **tool_args)
+            tool_time = time.time() - tool_start
             
             # Record action
             agent_action = AgentAction(
@@ -238,12 +293,27 @@ class ReActAgent(BaseAgent):
             # Step 3: Observe result
             observation = tool_result.to_string()
             
-            logger.info(
-                "ReAct observation",
-                iteration=iteration,
-                tool=tool_name,
-                success=tool_result.success
-            )
+            # Log detailed tool results, especially for retrieval
+            if tool_name == "retrieve_documents" and tool_result.success:
+                docs = tool_result.data.get("documents", []) if hasattr(tool_result, 'data') else []
+                logger.bind(tag=LogTag.TOOL.value).info(
+                    "Tool execution completed (retrieval)",
+                    iteration=iteration,
+                    tool=tool_name,
+                    success=tool_result.success,
+                    documents_retrieved=len(docs),
+                    tool_execution_time=f"{tool_time:.4f}s",
+                    scores=[f"{doc.get('score', 0):.4f}" for doc in docs[:3]]
+                )
+            else:
+                logger.bind(tag=LogTag.TOOL.value).info(
+                    "Tool execution completed",
+                    iteration=iteration,
+                    tool=tool_name,
+                    success=tool_result.success,
+                    tool_execution_time=f"{tool_time:.4f}s",
+                    error=tool_result.error if not tool_result.success else None
+                )
             
             # Update prompt with observation
             prompt = self._update_react_prompt(
@@ -261,7 +331,7 @@ class ReActAgent(BaseAgent):
             # Check if we should stop (e.g., tool failed or got good results)
             if not tool_result.success:
                 # Tool failed, might need to adjust approach
-                logger.warning(
+                logger.bind(tag=LogTag.TOOL.value).warning(
                     "Tool execution failed",
                     tool=tool_name,
                     error=tool_result.error
@@ -279,12 +349,31 @@ class ReActAgent(BaseAgent):
         # Update memory
         self.update_memory(query, response)
         
-        logger.info(
+        # Count tools used
+        tools_used = {}
+        for action in response.actions:
+            tool_name = action.tool_name
+            tools_used[tool_name] = tools_used.get(tool_name, 0) + 1
+        
+        # Count retrieved documents
+        total_docs_retrieved = 0
+        for action in response.actions:
+            if action.tool_name == "retrieve_documents" and action.tool_output and action.tool_output.success:
+                if hasattr(action.tool_output, 'data'):
+                    docs = action.tool_output.data.get('documents', [])
+                    total_docs_retrieved += len(docs)
+        
+        logger.bind(tag=LogTag.REACT.value).info(
             "ReAct agent completed",
             iterations=iteration,
             actions_count=len(response.actions),
+            tools_used=tools_used,
+            total_documents_retrieved=total_docs_retrieved,
             execution_time=f"{response.execution_time:.4f}s",
-            answer_length=len(response.answer)
+            answer_length=len(response.answer),
+            confidence=response.confidence,
+            has_reflection="reflection" in response.metadata,
+            has_refinement="refinement" in response.metadata
         )
         
         return response

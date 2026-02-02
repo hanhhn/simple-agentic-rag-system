@@ -4,7 +4,7 @@ Stream response handler for LLM outputs.
 import asyncio
 from typing import AsyncIterator, Callable, Iterator, Optional
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 
 
 logger = get_logger(__name__)
@@ -192,7 +192,7 @@ class StreamHandler:
     def clear(self) -> None:
         """Clear the buffer."""
         self.buffer = ""
-        logger.info("Stream handler buffer cleared")
+        logger.bind(tag=LogTag.LLM.value).info("Stream handler buffer cleared")
 
 
 class StreamingCallback:
@@ -285,7 +285,7 @@ class StreamingCallback:
             try:
                 callback(chunk)
             except Exception as e:
-                logger.error("Chunk callback failed", error=str(e))
+                logger.bind(tag=LogTag.LLM.value).error("Chunk callback failed", error=str(e))
     
     def trigger_start(self) -> None:
         """Trigger all start callbacks."""
@@ -293,7 +293,7 @@ class StreamingCallback:
             try:
                 callback()
             except Exception as e:
-                logger.error("Start callback failed", error=str(e))
+                logger.bind(tag=LogTag.LLM.value).error("Start callback failed", error=str(e))
     
     def trigger_end(self, full_text: str) -> None:
         """
@@ -306,7 +306,7 @@ class StreamingCallback:
             try:
                 callback(full_text)
             except Exception as e:
-                logger.error("End callback failed", error=str(e))
+                logger.bind(tag=LogTag.LLM.value).error("End callback failed", error=str(e))
     
     def trigger_error(self, error: Exception) -> None:
         """
@@ -319,4 +319,4 @@ class StreamingCallback:
             try:
                 callback(error)
             except Exception as e:
-                logger.error("Error callback failed", error=str(e))
+                logger.bind(tag=LogTag.LLM.value).error("Error callback failed", error=str(e))

@@ -4,7 +4,7 @@ Plain text document parser.
 from pathlib import Path
 from typing import List
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import DocumentParseError
 from src.parsers.base import Parser
 
@@ -51,7 +51,7 @@ class TxtParser(Parser):
         # Validate file
         self.validate_file(path)
         
-        logger.info("Parsing text file", filepath=str(path))
+        logger.bind(tag=LogTag.DOCUMENT.value).info("Parsing text file", filepath=str(path))
         
         try:
             # Read file with explicit encoding handling
@@ -59,15 +59,15 @@ class TxtParser(Parser):
             try:
                 content = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
-                logger.warning("UTF-8 decoding failed, trying latin-1", filepath=str(path))
+                logger.bind(tag=LogTag.DOCUMENT.value).warning("UTF-8 decoding failed, trying latin-1", filepath=str(path))
                 content = path.read_text(encoding="latin-1")
             
             # Validate content
             if not content:
-                logger.warning("Empty text file", filepath=str(path))
+                logger.bind(tag=LogTag.DOCUMENT.value).warning("Empty text file", filepath=str(path))
                 return ""
             
-            logger.info(
+            logger.bind(tag=LogTag.DOCUMENT.value).info(
                 "Successfully parsed text file",
                 filepath=str(path),
                 char_count=len(content),
@@ -77,7 +77,7 @@ class TxtParser(Parser):
             return content
             
         except Exception as e:
-            logger.error("Failed to parse text file", filepath=str(path), error=str(e))
+            logger.bind(tag=LogTag.DOCUMENT.value).error("Failed to parse text file", filepath=str(path), error=str(e))
             raise DocumentParseError(
                 f"Failed to parse text file: {str(e)}",
                 details={"filepath": str(filepath), "error": str(e)}

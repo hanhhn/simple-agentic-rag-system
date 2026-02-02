@@ -8,7 +8,7 @@ from fastapi import Request, Response
 from starlette.types import ASGIApp
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 
 
 logger = get_logger(__name__)
@@ -46,10 +46,18 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         Returns:
             HTTP response
         """
+        # Skip logging for metrics endpoint (frequently polled by Prometheus)
+        if request.url.path == "/metrics":
+            return await call_next(request)
+        
         start_time = time.time()
         
+        # Get trace_id from context
+        from src.api.middleware.tracing import get_trace_id
+        trace_id = get_trace_id()
+        
         # Log request
-        logger.info(
+        logger.bind(tag=LogTag.REQUEST.value, trace_id=trace_id).info(
             "Incoming request",
             method=request.method,
             path=request.url.path,
@@ -66,8 +74,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Add custom header with processing time
         response.headers["X-Process-Time"] = formatted_time
         
+        # Get trace_id from context
+        from src.api.middleware.tracing import get_trace_id
+        trace_id = get_trace_id()
+        
         # Log response
-        logger.info(
+        logger.bind(tag=LogTag.RESPONSE.value, trace_id=trace_id).info(
             "Request processed",
             method=request.method,
             path=request.url.path,
@@ -92,4 +104,4 @@ def add_logging_middleware(app: ASGIApp) -> None:
         >>> add_logging_middleware(app)
     """
     app.add_middleware(LoggingMiddleware)
-    logger.info("Logging middleware added to application")
+    logger.bind(tag=LogTag.MIDDLEWARE.value).info("Logging middleware added to application")

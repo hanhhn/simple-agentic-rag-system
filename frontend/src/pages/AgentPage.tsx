@@ -66,6 +66,7 @@ interface Conversation {
     message_count: number;
     created_at: string;
     updated_at: string;
+    collection?: string;
   };
 }
 
@@ -114,8 +115,11 @@ export default function AgentPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/v1/collections`);
       const data = await res.json();
-      if (data.success && data.data) {
-        setCollections(data.data.collections || []);
+      // API returns CollectionListResponse directly: { collections: [...], total: number }
+      if (data.collections && Array.isArray(data.collections)) {
+        // Extract collection names from CollectionInfo objects
+        const collectionNames = data.collections.map((col: any) => col.name);
+        setCollections(collectionNames);
       }
     } catch (error) {
       toast({
@@ -187,6 +191,13 @@ export default function AgentPage() {
       const data = await res.json();
       if (data.success && data.data) {
         const conv = data.data.conversation;
+        const metadata = data.data.metadata;
+        
+        // Set collection from conversation metadata if available
+        if (metadata && metadata.collection) {
+          setCollection(metadata.collection);
+        }
+        
         // Process messages into history
         const msgHistory = [];
         for (let i = 0; i < conv.messages.length; i += 2) {

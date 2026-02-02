@@ -4,7 +4,7 @@ Agent service for managing intelligent RAG agents.
 from typing import Any, Dict, List, Optional
 import time
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import AgentError
 from src.agents.base_agent import BaseAgent, AgentResponse
 from src.agents.react_agent import ReActAgent
@@ -70,7 +70,7 @@ class AgentService:
         # Initialize memory
         self.memory = ConversationMemory() if use_memory else None
         
-        logger.info(
+        logger.bind(tag=LogTag.AGENT_SERVICE.value).info(
             "Agent service initialized",
             tools_count=len(self.tools),
             use_memory=use_memory,
@@ -86,7 +86,7 @@ class AgentService:
             # WebSearchTool()  # Uncomment if web search is needed
         ]
         
-        logger.info(
+        logger.bind(tag=LogTag.TOOL.value).info(
             "Tools initialized",
             tool_names=[tool.name for tool in tools]
         )
@@ -125,7 +125,7 @@ class AgentService:
             reflector=reflector
         )
         
-        logger.info(
+        logger.bind(tag=LogTag.REACT.value).info(
             "ReAct agent created",
             tools_count=len(tools_to_use),
             temperature=temperature,
@@ -146,7 +146,7 @@ class AgentService:
             tools=self.tools
         )
         
-        logger.info("Query planner created")
+        logger.bind(tag=LogTag.PLANNER.value).info("Query planner created")
         
         return planner
     
@@ -172,15 +172,18 @@ class AgentService:
         """
         start_time = time.time()
         
-        logger.info(
+        logger.bind(tag=LogTag.AGENT_SERVICE.value).info(
             "Executing agentic query",
             query=query[:100],
+            query_length=len(query),
             collection=collection,
-            agent_type=agent_type
+            agent_type=agent_type,
+            enable_reflection=enable_reflection
         )
         
         try:
             # Create agent
+            agent_creation_start = time.time()
             if agent_type == "react":
                 agent = self.create_react_agent(enable_reflection=enable_reflection)
             else:
@@ -188,8 +191,20 @@ class AgentService:
                     f"Unknown agent type: {agent_type}",
                     details={"agent_type": agent_type}
                 )
+            agent_creation_time = time.time() - agent_creation_start
+            
+            logger.bind(tag=LogTag.AGENT_SERVICE.value).info(
+                "Agent created",
+                agent_type=agent_type,
+                creation_time=f"{agent_creation_time:.4f}s"
+            )
             
             # Execute query
+            logger.bind(tag=LogTag.AGENT_SERVICE.value).info(
+                "Starting agent execution",
+                query=query[:100]
+            )
+            
             response = await agent.run(
                 query=query,
                 collection=collection,
@@ -214,10 +229,29 @@ class AgentService:
                 }
             }
             
-            logger.info(
+            # Extract detailed metrics
+            tools_used = {}
+            total_docs_retrieved = 0
+            for action in response.actions:
+                tool_name = action.tool_name
+                tools_used[tool_name] = tools_used.get(tool_name, 0) + 1
+                
+                if tool_name == "retrieve_documents" and action.tool_output and action.tool_output.success:
+                    if hasattr(action.tool_output, 'data'):
+                        docs = action.tool_output.data.get('documents', [])
+                        total_docs_retrieved += len(docs)
+            
+            logger.bind(tag=LogTag.AGENT_SERVICE.value).info(
                 "Agentic query completed successfully",
                 answer_length=len(response.answer),
+                answer_preview=response.answer[:200] if response.answer else None,
                 actions_count=len(response.actions),
+                tools_used=tools_used,
+                total_documents_retrieved=total_docs_retrieved,
+                iterations=response.metadata.get("iterations", 0),
+                confidence=response.confidence,
+                has_reflection="reflection" in response.metadata,
+                has_refinement="refinement" in response.metadata,
                 execution_time=f"{execution_time:.4f}s"
             )
             
@@ -225,12 +259,15 @@ class AgentService:
             
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error(
+            logger.bind(tag=LogTag.AGENT_SERVICE.value).error(
                 "Agentic query failed",
                 query=query[:100],
+                collection=collection,
+                agent_type=agent_type,
                 error=str(e),
                 error_type=type(e).__name__,
-                execution_time=f"{execution_time:.4f}s"
+                execution_time=f"{execution_time:.4f}s",
+                exc_info=True
             )
             
             return {
@@ -258,7 +295,7 @@ class AgentService:
         Returns:
             Dictionary with execution plan
         """
-        logger.info(
+        logger.bind(tag=LogTag.PLANNER.value).info(
             "Planning query",
             query=query[:100],
             collection=collection
@@ -301,7 +338,7 @@ class AgentService:
             tool: Tool to add
         """
         self.tools.append(tool)
-        logger.info("Tool added to service", tool_name=tool.name)
+        logger.bind(tag=LogTag.TOOL.value).info("Tool added to service", tool_name=tool.name)
     
     def remove_tool(self, tool_name: str) -> bool:
         """
@@ -316,7 +353,7 @@ class AgentService:
         for i, tool in enumerate(self.tools):
             if tool.name == tool_name:
                 self.tools.pop(i)
-                logger.info("Tool removed from service", tool_name=tool_name)
+                logger.bind(tag=LogTag.TOOL.value).info("Tool removed from service", tool_name=tool_name)
                 return True
         return False
     
@@ -328,7 +365,7 @@ class AgentService:
         """Clear conversation memory."""
         if self.memory:
             self.memory.clear()
-            logger.info("Agent memory cleared")
+            logger.bind(tag=LogTag.MEMORY.value).info("Agent memory cleared")
     
     def get_available_tools(self) -> List[Dict[str, Any]]:
         """

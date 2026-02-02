@@ -7,7 +7,7 @@ from celery import Celery
 from celery.signals import setup_logging, worker_process_init
 
 from src.core.config import get_config
-from src.core.logging import configure_logging, get_logger
+from src.core.logging import configure_logging, get_logger, LogTag
 
 
 # Configure logging before creating Celery app
@@ -29,7 +29,7 @@ celery_app = Celery(
 def config_loggers(*args, **kwargs):
     """Configure logging for Celery workers."""
     configure_logging()
-    logger.info("Celery logging configured")
+    logger.bind(tag=LogTag.SYSTEM.value).info("Celery logging configured")
 
 
 @worker_process_init.connect
@@ -44,7 +44,7 @@ def init_worker_process(*args, **kwargs):
     Note: For thread/solo pools, this may not be called or may
     be called differently, so we use lazy loading in services.
     """
-    logger.info(
+    logger.bind(tag=LogTag.SYSTEM.value).info(
         "Worker process initialized",
         worker_pool=config.celery.worker_pool
     )
@@ -55,15 +55,15 @@ def init_worker_process(*args, **kwargs):
         from src.embedding.model_loader import ModelLoader
         # The ModelLoader uses a class-level cache, but each worker
         # process will have its own memory space, so this is safe
-        logger.info("Worker process ready for model loading")
+        logger.bind(tag=LogTag.SYSTEM.value).info("Worker process ready for model loading")
     except Exception as e:
-        logger.warning(
+        logger.bind(tag=LogTag.SYSTEM.value).warning(
             "Error during worker process initialization",
             error=str(e)
         )
 
 
-logger.info(
+logger.bind(tag=LogTag.SYSTEM.value).info(
     "Celery app initialized",
     broker=config.celery.broker_url,
     backend=config.celery.result_backend,

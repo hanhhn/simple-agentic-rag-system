@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from celery.result import AsyncResult
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import ServiceError
 from src.api.models.task import TaskResponse, TaskListResponse, TaskStatus
 from src.tasks.celery_app import celery_app
@@ -72,7 +72,7 @@ async def get_task_status(task_id: str) -> TaskResponse:
         TaskResponse with task status and result
     """
     try:
-        logger.info("Getting task status", task_id=task_id)
+        logger.bind(tag=LogTag.API.value).info("Getting task status", task_id=task_id)
         
         # Get task result
         task = AsyncResult(task_id, app=celery_app)
@@ -119,7 +119,7 @@ async def get_task_status(task_id: str) -> TaskResponse:
             if not response_data["started_at"]:
                 response_data["started_at"] = getattr(task.request, "started_at", None)
         
-        logger.info(
+        logger.bind(tag=LogTag.API.value).info(
             "Task status retrieved",
             task_id=task_id,
             status=status.value
@@ -128,7 +128,7 @@ async def get_task_status(task_id: str) -> TaskResponse:
         return TaskResponse(**response_data)
         
     except Exception as e:
-        logger.error("Failed to get task status", task_id=task_id, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get task status", task_id=task_id, error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -164,12 +164,12 @@ async def revoke_task(task_id: str) -> dict:
         Dictionary with revocation result
     """
     try:
-        logger.info("Revoking task", task_id=task_id)
+        logger.bind(tag=LogTag.API.value).info("Revoking task", task_id=task_id)
         
         # Revoke task
         celery_app.control.revoke(task_id, terminate=True)
         
-        logger.info("Task revoked", task_id=task_id)
+        logger.bind(tag=LogTag.API.value).info("Task revoked", task_id=task_id)
         
         return {
             "success": True,
@@ -178,7 +178,7 @@ async def revoke_task(task_id: str) -> dict:
         }
         
     except Exception as e:
-        logger.error("Failed to revoke task", task_id=task_id, error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to revoke task", task_id=task_id, error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -226,7 +226,7 @@ async def list_tasks(
         TaskListResponse with task list
     """
     try:
-        logger.info("Listing tasks", status=status, limit=limit)
+        logger.bind(tag=LogTag.API.value).info("Listing tasks", status=status, limit=limit)
         
         # Get active tasks from workers
         inspect = celery_app.control.inspect()
@@ -261,10 +261,10 @@ async def list_tasks(
                 )
                 tasks.append(task_response)
             except Exception as e:
-                logger.warning("Failed to get task info", task_id=task_id, error=str(e))
+                logger.bind(tag=LogTag.API.value).warning("Failed to get task info", task_id=task_id, error=str(e))
                 continue
         
-        logger.info("Tasks listed", count=len(tasks))
+        logger.bind(tag=LogTag.API.value).info("Tasks listed", count=len(tasks))
         
         return TaskListResponse(
             tasks=tasks,
@@ -272,7 +272,7 @@ async def list_tasks(
         )
         
     except Exception as e:
-        logger.error("Failed to list tasks", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to list tasks", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={
@@ -313,12 +313,12 @@ async def get_task_stats() -> dict:
                     stats["by_queue"][task_name] = {"active": 0, "failed": 0}
                 stats["by_queue"][task_name]["active"] += 1
 
-        logger.info("Task stats retrieved", stats=stats)
+        logger.bind(tag=LogTag.API.value).info("Task stats retrieved", stats=stats)
 
         return stats
 
     except Exception as e:
-        logger.error("Failed to get task stats", error=str(e))
+        logger.bind(tag=LogTag.API.value).error("Failed to get task stats", error=str(e))
         raise HTTPException(
             status_code=500,
             detail={

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 import time
 
-from src.core.logging import get_logger
+from src.core.logging import get_logger, LogTag
 from src.core.exceptions import AgentError
 
 
@@ -125,7 +125,7 @@ class QueryPlanner(Planner):
         self.llm_service = llm_service
         self.tools = tools or []
         
-        logger.info(
+        logger.bind(tag=LogTag.PLANNER.value).info(
             "Query planner initialized",
             tools_count=len(tools) if tools else 0
         )
@@ -147,7 +147,7 @@ class QueryPlanner(Planner):
         """
         start_time = time.time()
         
-        logger.info(
+        logger.bind(tag=LogTag.PLANNER.value).info(
             "Planning query",
             query=query[:100],
             context_keys=list(context.keys()) if context else []
@@ -173,7 +173,7 @@ class QueryPlanner(Planner):
                 estimated_steps=1
             )
             
-            logger.info("Simple query - single step plan")
+            logger.bind(tag=LogTag.PLANNER.value).info("Simple query - single step plan")
             return plan
         
         # For complex queries, use LLM to decompose
@@ -183,7 +183,7 @@ class QueryPlanner(Planner):
         
         execution_time = time.time() - start_time
         
-        logger.info(
+        logger.bind(tag=LogTag.PLANNER.value).info(
             "Query plan created",
             query_type=query_type.value,
             sub_queries=len(plan.sub_queries),
@@ -325,7 +325,7 @@ Respond with only the JSON, no other text."""
             )
             
         except Exception as e:
-            logger.error("Failed to decompose query", error=str(e))
+            logger.bind(tag=LogTag.PLANNER.value).error("Failed to decompose query", error=str(e))
             # Fallback to single query
             return QueryPlan(
                 original_query=query,
