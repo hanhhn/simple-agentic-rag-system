@@ -12,7 +12,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from src.core.logging import configure_logging, get_logger
 from src.core.config import get_config
-from src.api.routes import health, documents, query, collections, tasks, models, agents
+from src.api.routes import health, documents, query, collections, tasks, models, agents, conversations
 from src.api.middleware import logging as logging_middleware
 from src.api.middleware import rate_limit as rate_limit_middleware
 
@@ -134,6 +134,7 @@ app.include_router(collections.router, prefix="/api/v1")
 app.include_router(tasks.router, prefix="/api/v1")
 app.include_router(models.router, prefix="/api/v1")
 app.include_router(agents.router, prefix="/api/v1")
+app.include_router(conversations.router, prefix="/api/v1")
 
 # Instrument the app with Prometheus (must be done before startup)
 instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)

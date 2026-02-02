@@ -238,11 +238,15 @@ class Reflector:
         ])
         
         docs_context = ""
+        docs_section = "No documents retrieved."
         if retrieved_docs:
-            docs_context = "\n\n".join([
-                f"Document {i+1}: {doc.get('text', '')[:300]}"
-                for i, doc in enumerate(retrieved_docs[:3])
-            ])
+            docs_context = "\n\n".join(
+                [
+                    f"Document {i+1}: {doc.get('text', '')[:300]}"
+                    for i, doc in enumerate(retrieved_docs[:3])
+                ]
+            )
+            docs_section = f"Retrieved Documents:\n{docs_context}"
         
         prompt = f"""You are an answer quality evaluator. Evaluate the following answer based on the given criteria.
 
@@ -252,8 +256,7 @@ Original Query:
 Agent Answer:
 {answer}
 
-{f'Retrieved Documents:
-{docs_context}' if retrieved_docs else 'No documents retrieved.'}
+{docs_section}
 
 Evaluation Criteria:
 {criteria_descriptions}

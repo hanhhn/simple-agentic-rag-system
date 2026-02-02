@@ -25,6 +25,8 @@ import {
   BookOpen
 } from 'lucide-react';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 interface AgentAction {
   tool: string;
   input: Record<string, any>;
@@ -110,7 +112,7 @@ export default function AgentPage() {
 
   const fetchCollections = async () => {
     try {
-      const res = await fetch('/api/v1/collections');
+      const res = await fetch(`${API_BASE_URL}/api/v1/collections`);
       const data = await res.json();
       if (data.success && data.data) {
         setCollections(data.data.collections || []);
@@ -129,8 +131,8 @@ export default function AgentPage() {
       const params = new URLSearchParams();
       if (filterStatus) params.append('status', filterStatus);
       if (searchQuery) params.append('search', searchQuery);
-      
-      const res = await fetch(`/api/v1/conversations/?${params}`);
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/?${params.toString()}`);
       const data = await res.json();
       if (data.success && data.data) {
         setConversations(data.data.conversations || []);
@@ -142,7 +144,7 @@ export default function AgentPage() {
 
   const fetchInsights = async () => {
     try {
-      const res = await fetch('/api/v1/conversations/analytics/insights');
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/analytics/insights`);
       const data = await res.json();
       if (data.success && data.data) {
         setInsights(data.data.insights || []);
@@ -154,14 +156,13 @@ export default function AgentPage() {
 
   const createNewConversation = async () => {
     try {
-      const res = await fetch('/api/v1/conversations/', {
+      const url = new URL(`${API_BASE_URL}/api/v1/conversations/`);
+      url.searchParams.set('title', `Conversation ${new Date().toLocaleString()}`);
+      url.searchParams.set('collection', collection);
+      url.searchParams.set('priority', 'medium');
+
+      const res = await fetch(url.toString(), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `Conversation ${new Date().toLocaleString()}`,
-          collection: collection,
-          priority: 'medium'
-        })
       });
       const data = await res.json();
       if (data.success && data.data) {
@@ -182,7 +183,7 @@ export default function AgentPage() {
     setResponse(null);
     // Load conversation messages
     try {
-      const res = await fetch(`/api/v1/conversations/${convId}`);
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${convId}`);
       const data = await res.json();
       if (data.success && data.data) {
         const conv = data.data.conversation;
@@ -206,7 +207,7 @@ export default function AgentPage() {
 
   const archiveConversation = async (convId: string) => {
     try {
-      const res = await fetch(`/api/v1/conversations/${convId}/archive`, { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${convId}/archive`, { method: 'POST' });
       if (res.ok) {
         await fetchConversations();
         toast({ title: 'Success', description: 'Conversation archived' });
@@ -219,7 +220,7 @@ export default function AgentPage() {
   const deleteConversation = async (convId: string) => {
     if (!confirm('Are you sure you want to delete this conversation?')) return;
     try {
-      const res = await fetch(`/api/v1/conversations/${convId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${convId}`, { method: 'DELETE' });
       if (res.ok) {
         if (currentConversationId === convId) {
           setCurrentConversationId(null);
@@ -235,7 +236,7 @@ export default function AgentPage() {
 
   const exportConversation = async (convId: string) => {
     try {
-      const res = await fetch(`/api/v1/conversations/${convId}/export?format=${exportFormat}`);
+      const res = await fetch(`${API_BASE_URL}/api/v1/conversations/${convId}/export?format=${exportFormat}`);
       const data = await res.json();
       if (data.success && data.data) {
         const blob = new Blob([data.data.data], { 
@@ -264,16 +265,16 @@ export default function AgentPage() {
     setResponse(null);
 
     try {
-      const res = await fetch('/api/v1/agents/query', {
+      const params = new URLSearchParams({
+        query: query.trim(),
+        collection,
+        agent_type: 'react',
+        temperature: '0.7',
+        enable_reflection: String(enableReflection),
+      });
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/agents/query?${params.toString()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: query.trim(),
-          collection: collection,
-          agent_type: 'react',
-          temperature: 0.7,
-          enable_reflection: enableReflection,
-        }),
       });
 
       const data: AgentResponse = await res.json();

@@ -15,7 +15,7 @@ import { Badge } from '../components/ui/badge';
 import { 
   Calendar, Clock, Activity, TrendingUp, BarChart3,
   ChevronRight, ChevronLeft, Filter, Download, Maximize2,
-  MessageSquare, Tool, Zap, Target
+  MessageSquare, Wrench, Zap, Target
 } from 'lucide-react';
 
 interface TimelineEvent {
@@ -228,7 +228,7 @@ export function ConversationTimeline({
       case 'response':
         return <Activity className="h-4 w-4 text-green-500" />;
       case 'tool_used':
-        return <Tool className="h-4 w-4 text-purple-500" />;
+        return <Wrench className="h-4 w-4 text-purple-500" />;
       case 'reflection':
         return <Zap className="h-4 w-4 text-yellow-500" />;
       case 'error':

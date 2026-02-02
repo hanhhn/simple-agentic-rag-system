@@ -1,0 +1,26 @@
+{
+  "conversations": {
+    "6dc3a99e-96a4-42e8-8b7c-5159add34fca": {
+      "id": "6dc3a99e-96a4-42e8-8b7c-5159add34fca",
+      "messages": [],
+      "metadata": {
+        "user_id": "default",
+        "collection": "default"
+      },
+      "created_at": "2026-02-02T17:41:09.797103",
+      "updated_at": "2026-02-02T17:41:09.797103"
+    }
+  },
+  "conversation_metadata": {
+    "6dc3a99e-96a4-42e8-8b7c-5159add34fca": {
+      "title": "Conversation 2/2/2026, 5:41:09 PM",
+      "tags": [],
+      "status": "active",
+      "priority": "medium",
+      "collection": "default",
+      "user_id": "default",
+      "session_id": "",
+      "message_count": 0,
+      "total_tokens": 0,
+      "avg_confidence": 0.0,
+      "last_activity": 
