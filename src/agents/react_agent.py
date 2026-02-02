@@ -3,6 +3,7 @@ ReAct (Reasoning + Acting) Agent implementation.
 """
 from typing import Any, Dict, List, Optional
 import time
+import json
 
 from src.core.logging import get_logger
 from src.core.exceptions import AgentError
@@ -395,7 +396,7 @@ Thought:"""
         
         return prompt
     
-    def stream_run(
+    async def stream_run(
         self,
         query: str,
         context: Optional[Dict[str, Any]] = None,
@@ -416,11 +417,11 @@ Thought:"""
         """
         # This is a simplified version - in production, implement proper streaming
         yield ("start", f"Starting ReAct agent for: {query}")
-        
+
         response = await self.run(query, context, **kwargs)
-        
+
         for step in response.intermediate_steps:
             yield ("step", step)
-        
+
         yield ("answer", response.answer)
         yield ("end", f"Completed in {len(response.actions)} steps")
