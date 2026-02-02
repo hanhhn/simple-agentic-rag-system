@@ -26,11 +26,11 @@ flowchart TB
     User[User / Frontend] -->|Queries, Document actions| AgenticRAG[Agentic RAG API]
 
     subgraph AgenticRAG[ Agentic RAG System ]
-        Orchestrator[Query Orchestrator Agent<br/>(QueryProcessor + LLMService)]
-        IngestionAgent[Ingestion Agent<br/>(API + DocumentProcessor + Celery)]
-        EmbeddingAgent[Embedding Agent<br/>(EmbeddingService + Celery)]
-        RetrievalAgent[Retrieval Agent<br/>(VectorStore)]
-        ModelAgent[Model Management Agent<br/>(LLMService / EmbeddingService)]
+        Orchestrator["Query Orchestrator Agent (QueryProcessor + LLMService)"]
+        IngestionAgent["Ingestion Agent (API + DocumentProcessor + Celery)"]
+        EmbeddingAgent["Embedding Agent (EmbeddingService + Celery)"]
+        RetrievalAgent["Retrieval Agent (VectorStore)"]
+        ModelAgent["Model Management Agent (LLMService / EmbeddingService)"]
         MonitoringAgent[Monitoring & Logging Agent]
     end
 
@@ -68,34 +68,34 @@ flowchart TB
         direction TB
 
         subgraph APIContainer["API & Orchestration"]
-            APIServer[FastAPI API Server<br/>`src/api`]
-            QueryOrchestrator[Query Orchestrator Agent<br/>`QueryProcessor`]
+            APIServer["FastAPI API Server (`src/api`)"]
+            QueryOrchestrator["Query Orchestrator Agent (`QueryProcessor`)"]
         end
 
         subgraph TaskQueue["Task Queue Layer"]
             RedisBroker[Redis Broker/Backend]
-            CeleryWorkers[Celery Workers<br/>Documents & Embeddings]
+            CeleryWorkers["Celery Workers (Documents & Embeddings)"]
         end
 
         subgraph Ingestion["Ingestion Agent"]
-            DocumentProcessor[Document Processor<br/>`DocumentProcessor`]
-            StorageManager[Storage Manager<br/>`StorageManager`]
+            DocumentProcessor["Document Processor (`DocumentProcessor`)"]
+            StorageManager["Storage Manager (`StorageManager`)"]
         end
 
         subgraph Embeddings["Embedding Agent"]
-            EmbeddingService[Embedding Service<br/>`EmbeddingService`]
+            EmbeddingService["Embedding Service (`EmbeddingService`)"]
         end
 
         subgraph Retrieval["Retrieval Agent"]
-            VectorStoreService[Vector Store Service<br/>`VectorStore`]
+            VectorStoreService["Vector Store Service (`VectorStore`)"]
         end
 
         subgraph LLM["Answer / Model Agent"]
-            LLMService[LLM Service<br/>`LLMService` + `PromptBuilder`]
+            LLMService["LLM Service (`LLMService` + `PromptBuilder`)]
         end
 
         subgraph Observability["Monitoring & Logging Agent"]
-            Logging[Structured Logging<br/>`src/core/logging.py`]
+            Logging["Structured Logging (`src/core/logging.py`)"]
             Metrics[Metrics Exporters / Middleware]
         end
     end
@@ -156,12 +156,12 @@ flowchart TB
     subgraph QueryOrchestratorAgent["Query Orchestrator Agent (`QueryProcessor`)"]
         direction TB
 
-        QueryAPI[Query API Route<br/>`src/api/routes/query.py`]
-        Validator[QueryValidator<br/>`src/utils/validators.py`]
-        Orchestrator[QueryProcessor<br/>`process_query` / `process_query_stream`]
-        Retriever[VectorStore Client<br/>`VectorStore.search`]
-        Embedder[Embedding Client<br/>`EmbeddingService.generate_embedding`]
-        RAGLLM[LLM RAG Wrapper<br/>`LLMService.generate_rag(_stream)`]
+        QueryAPI["Query API Route (`src/api/routes/query.py`)"]
+        Validator["QueryValidator (`src/utils/validators.py`)"]
+        Orchestrator["QueryProcessor (`process_query` / `process_query_stream`)"]
+        Retriever["VectorStore Client (`VectorStore.search`)"]
+        Embedder["Embedding Client (`EmbeddingService.generate_embedding`)"]
+        RAGLLM["LLM RAG Wrapper (RAG generation)"]
 
         QueryAPI --> Validator
         QueryAPI --> Orchestrator
@@ -229,8 +229,8 @@ These agents collaborate asynchronously:
 ```mermaid
 flowchart TB
     subgraph AnswerAgent["Answer / Model Agent (`LLMService` + `PromptBuilder`)"]
-        PromptBuilder[PromptBuilder<br/>RAG & summarisation templates]
-        LLMClient[OllamaClient<br/>HTTP integration]
+        PromptBuilder["PromptBuilder (RAG & summarisation templates)"]
+        LLMClient["OllamaClient (HTTP integration)"]
         RAGWrapper[LLMService.generate_rag / _stream]
         Summarizer[LLMService.summarize]
         ModelManager[Model listing & switching]
@@ -317,11 +317,110 @@ classDiagram
 - **Retrieval Agent** → `VectorStore` (used by both ingestion and query flows)
 - **Answer / Model Agent** → `LLMService`, `PromptBuilder`, `OllamaClient`
 
-## 5. Relationship to Base C4 Model
+## 5. Cross‑Cutting Architecture Concerns (Agentic View)
+
+While sections 2–4 focus on structure and behaviour, this section highlights **cross‑cutting technical concerns** that make the architecture robust and “agentic in practice”.
+
+### 5.1 Autonomy and Local Decision‑Making
+
+- **Autonomous agents**: Each agent (Ingestion, Embedding, Retrieval, Answer / Model, Monitoring) owns a clear goal and can keep working as long as its **local dependencies** are healthy (e.g. Embedding Agent can drain the embeddings queue even if the query API is down).
+- **Local policies**:
+  - Ingestion Agent chooses parsing, cleaning, and chunking strategies based on document type and configuration.
+  - Embedding Agent decides batching, caching usage, and when to create collections in Qdrant.
+  - Query Orchestrator decides whether to:
+    - execute vector search only (`use_rag=False`)
+    - fall back to retrieval‑only when no contexts pass the threshold
+    - trigger full RAG (embedding → retrieval → LLM) and whether to stream.
+- **Graceful degradation**:
+  - If **Ollama** is unavailable, retrieval‑only paths can continue working.
+  - If **Qdrant** is degraded, ingestion can still store raw files while embedding tasks fail fast and surface errors via task status.
+
+### 5.2 Reliability, Retries, and Idempotency
+
+- **Celery as reliability backbone**:
+  - Long‑running and failure‑prone work (parsing, embedding, deletion) runs as Celery tasks.
+  - Retries with backoff are configured per task type (e.g. transient Qdrant/Ollama/network errors).
+- **Idempotent operations**:
+  - Document ingestion tasks can be safely retried because:
+    - file storage is keyed by collection + filename / document id
+    - vector insertion uses stable identifiers (document id, chunk index).
+  - Collection creation in Qdrant is safe to repeat as long as the configuration (dimension) matches.
+- **Clear error boundaries**:
+  - Service‑level exceptions (`ServiceError`, `EmbeddingError`, `LLMError`, etc.) mark boundaries between layers and agents.
+  - API layer maps errors to HTTP responses; tasks record failures in a structured way for later inspection.
+
+### 5.3 Performance and Scalability
+
+- **Scaling levers**:
+  - **API pods** (Query Orchestrator + HTTP API) scale for concurrency and streaming throughput.
+  - **Document workers** scale ingestion throughput.
+  - **Embedding workers** scale vector creation throughput.
+  - **Qdrant** and **Ollama** scale independently underneath.
+- **Performance techniques**:
+  - Batch embeddings in the Embedding Agent to maximise GPU/CPU utilisation.
+  - Use `EmbeddingCache` to avoid recomputing vectors for repeated or overlapping content.
+  - Limit `top_k`, constrain `score_threshold`, and cap query length via `QueryValidator` to protect backends.
+- **Latency characteristics**:
+  - Ingestion and embedding are **eventually consistent**; newly uploaded documents may not be queryable until background tasks complete.
+  - Query path is optimised for user latency; streaming responses reduce perceived wait time for LLM answers.
+
+### 5.4 Security, Access, and Multi‑Tenancy Considerations
+
+The base implementation is primarily single‑tenant, but the architecture anticipates multi‑tenant and hardened deployments:
+
+- **Boundary enforcement**:
+  - All external access goes through the FastAPI layer; agents are **not** directly exposed.
+  - Validation and authentication/authorisation (when enabled) occur at the API boundary.
+- **Collection‑level isolation**:
+  - Collections in Qdrant act as isolation units; tenants or projects can be mapped to collections or collection prefixes.
+  - File storage layout mirrors collections, making it easier to apply per‑collection retention or access policies.
+- **Secrets and configuration**:
+  - Sensitive configuration (Qdrant keys, Ollama endpoints, Redis passwords) is supplied via environment variables / secret stores.
+  - Agents read configuration via shared infrastructure modules to keep secrets out of application code.
+- **Future extensions**:
+  - Per‑tenant rate limits and quotas on:
+    - ingestion volume
+    - embedding throughput
+    - LLM tokens per unit time.
+
+### 5.5 Observability and Operations
+
+- **Logging as a Monitoring Agent**:
+  - Structured logs carry fields like `agent`, `task_id`, `collection`, `document_id`, `chunk_count`, `latency_ms`.
+  - Query logs include per‑phase timing (validation, embedding, search, LLM) to support SLOs.
+- **Metrics and dashboards**:
+  - Prometheus metrics expose:
+    - RAG query latency histogram
+    - embedding throughput and cache hit rates
+    - task failure rates per queue.
+  - Grafana dashboards visualise:
+    - ingestion backlog (number of pending tasks per queue)
+    - Qdrant write and query error rates
+    - LLM latency and token throughput.
+- **Diagnostics and debugging**:
+  - Task status endpoints and Celery’s backend store allow operators to inspect:
+    - in‑flight and failed tasks
+    - last error stack traces
+    - payload summaries (without leaking full user content into logs where not desired).
+
+### 5.6 Extensibility and Agent Evolution
+
+- **Agent role composition**:
+  - Existing agents are compositions of services and tasks, making it straightforward to add new agents that reuse the same services.
+  - Examples of future agents:
+    - **Planning Agent**: orchestrates multi‑step workflows across collections and tools.
+    - **Critic / Post‑processing Agent**: evaluates answers and may trigger follow‑up retrieval.
+    - **Routing Agent**: selects collections, retrieval strategies, or models based on query type.
+    - **Evaluation Agent**: runs scheduled offline evaluations using the same RAG primitives.
+- **Policy‑driven behaviour**:
+  - Many decisions (e.g. when to call LLM, thresholds, chunking strategy) are exposed as configuration, supporting:
+    - environment‑specific tuning (dev vs prod)
+    - per‑collection / per‑tenant overrides in future.
+
+## 6. Relationship to Base C4 Model
 
 - The **containers and components** are the same as the base RAG system; the **agentic view** is primarily about:
   - clearer **intent‑centric** boundaries (ingest, embed, retrieve, answer, manage)
   - explicit use of **Celery workers as autonomous agents**
   - emphasising **local decision‑making** (caching, retries, validation) as agent responsibilities.
 - This document should be read **after** `rag/02-c4-model.md` to understand how the same codebase supports both a traditional RAG pipeline view and an agent‑oriented view of the system.
-

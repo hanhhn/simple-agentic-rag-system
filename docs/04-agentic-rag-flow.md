@@ -12,7 +12,7 @@ It complements the more diagram‑heavy documents:
 
 - `01-agentic-rag-c4-model.md`
 - `02-agentic-rag-high-level-design.md`
-- `04-agentic-rag-sequence-diagrams.md`
+- `03-agentic-rag-sequence-diagrams.md`
 
 ## 1. Main Agentic Flows
 

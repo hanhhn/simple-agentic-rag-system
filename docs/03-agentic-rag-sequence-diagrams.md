@@ -10,7 +10,7 @@ This document provides **agent‑centric sequence diagrams** for the main flows 
 - Document deletion and cleanup
 - Model management
 
-It builds on the generic sequence diagrams in `rag/05-sequence-diagrams.md` and the flows described in `03-agentic-rag-flow.md`.
+It builds on the generic sequence diagrams in `rag/05-sequence-diagrams.md`.
 
 ---
 
