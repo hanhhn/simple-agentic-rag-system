@@ -22,6 +22,7 @@ from src.api.models.collection import (
 from src.api.models.common import SuccessResponse
 from src.api.dependencies import get_vector_store, get_embedding_service, get_storage_manager
 from src.utils.validators import CollectionValidator
+from src.core.metrics import collection_info, collection_operations
 
 
 logger = get_logger(__name__)
@@ -86,6 +87,9 @@ async def create_collection(
             dimension=request.dimension,
             distance_metric=request.distance_metric
         )
+        
+        # Track collection creation
+        collection_operations.labels(operation='create', collection=request.name).inc()
         
         logger.info("Collection created successfully", name=request.name)
         
@@ -261,6 +265,92 @@ async def get_collection(
                 "success": False,
                 "error_code": "INTERNAL_ERROR",
                 "message": f"Failed to get collection: {str(e)}"
+            }
+        )
+
+
+@router.get(
+    "/{collection_name}/stats", 
+    response_model=dict,
+    status_code=200,
+    summary="Get collection statistics",
+    description="""
+    Retrieve detailed statistics for a specific collection.
+    
+    **Parameters:**
+    - `collection_name`: Name of the collection
+    
+    **Returns:**
+    - Dictionary with statistics including vector count, dimensions, and indexing status
+    
+    **Example:**
+    ```json
+    {
+        "collection": "my_collection",
+        "vector_count": 1024,
+        "dimension": 384,
+        "status": "green",
+        "indexed_vectors": 1024,
+        "optimizer_status": "ready",
+        "segments_count": 1,
+        "points_count": 1024
+    }
+    ```
+    """
+)
+async def get_collection_stats(
+    collection_name: str,
+    vector_store = Depends(get_vector_store)
+) -> dict:
+    """
+    Get collection statistics.
+    
+    Args:
+        collection_name: Name of the collection
+        
+    Returns:
+        Dictionary with collection statistics
+    """
+    try:
+        logger.info("Getting collection statistics", collection=collection_name)
+        
+        # Get collection info from Qdrant
+        info = vector_store.get_collection_info(collection_name)
+        
+        # Prepare statistics
+        stats = {
+            "collection": collection_name,
+            "vector_count": info.get("vector_count", 0),
+            "dimension": info.get("dimension", 0),
+            "status": info.get("status", "unknown"),
+            "indexed_vectors": info.get("indexed", 0),
+            "optimizer_status": info.get("optimizer_status", {}),
+            "segments_count": info.get("segments_count", 0),
+            "points_count": info.get("vector_count", 0)
+        }
+        
+        logger.info(
+            "Collection statistics retrieved",
+            collection=collection_name,
+            vector_count=stats["vector_count"]
+        )
+        
+        return stats
+        
+    except CollectionNotFoundError as e:
+        logger.error("Collection not found", collection=collection_name, error=str(e))
+        raise HTTPException(
+            status_code=404,
+            detail=e.to_dict()
+        )
+    except Exception as e:
+        logger.error("Failed to get collection stats", collection=collection_name, error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error_code": "INTERNAL_ERROR",
+                "message": f"Failed to get collection stats: {str(e)}"
             }
         )
 

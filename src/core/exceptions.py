@@ -163,6 +163,32 @@ class PromptError(LLMError):
     pass
 
 
+# Agent Exceptions
+class AgentError(BaseRAGException):
+    """Base exception for agent-related errors."""
+    pass
+
+
+class AgentExecutionError(AgentError):
+    """Raised when agent execution fails."""
+    pass
+
+
+class ToolExecutionError(AgentError):
+    """Raised when tool execution fails."""
+    pass
+
+
+class PlanningError(AgentError):
+    """Raised when query planning fails."""
+    pass
+
+
+class MemoryError(AgentError):
+    """Raised when memory operations fail."""
+    pass
+
+
 # API Exceptions
 class APIError(BaseRAGException):
     """Base exception for API-related errors."""

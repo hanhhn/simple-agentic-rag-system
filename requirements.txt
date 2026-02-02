@@ -48,3 +48,6 @@ prometheus-fastapi-instrumentator==6.1.0
 # Data Crawler
 tqdm==4.66.1
 requests==2.31.0
+
+# Metrics Client
+prometheus-client>=0.20.0

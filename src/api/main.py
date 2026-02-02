@@ -12,7 +12,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from src.core.logging import configure_logging, get_logger
 from src.core.config import get_config
-from src.api.routes import health, documents, query, collections, tasks
+from src.api.routes import health, documents, query, collections, tasks, models, agents
 from src.api.middleware import logging as logging_middleware
 from src.api.middleware import rate_limit as rate_limit_middleware
 
@@ -48,6 +48,14 @@ tags_metadata = [
         "description": "Monitor and manage background tasks (e.g., document processing tasks).",
     },
     {
+        "name": "Models",
+        "description": "Manage LLM and embedding models (list, switch, view info, clear cache).",
+    },
+    {
+        "name": "Agents",
+        "description": "Intelligent agents with tool capabilities for complex queries. Uses ReAct pattern for reasoning and acting.",
+    },
+    {
         "name": "Root",
         "description": "Root endpoint and API information.",
     },
@@ -59,13 +67,15 @@ app = FastAPI(
     title=config.app.app_name,
     version=config.app.api_version,
     description="""
-    A simple RAG (Retrieval-Augmented Generation) system using local LLMs.
+    An Agentic RAG (Retrieval-Augmented Generation) system with intelligent agents.
     
     ## Features
     
     * **Collection Management**: Create and manage vector collections
     * **Document Processing**: Upload documents (PDF, TXT, MD, DOCX) with automatic chunking and embedding
     * **RAG Queries**: Query documents using semantic search with LLM-powered answer generation
+    * **Agentic Queries**: Use intelligent agents with tool capabilities for complex queries
+    * **Multi-step Reasoning**: Agents can reason, plan, and execute multi-step tasks
     * **Task Management**: Monitor background document processing tasks
     * **Health Monitoring**: Check system and service health status
     
@@ -73,7 +83,7 @@ app = FastAPI(
     
     1. Create a collection using the Collections API
     2. Upload documents to the collection
-    3. Query the collection using natural language questions
+    3. Use the Agent API for intelligent query processing with tools
     """,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -122,6 +132,8 @@ app.include_router(documents.router, prefix="/api/v1")
 app.include_router(query.router, prefix="/api/v1")
 app.include_router(collections.router, prefix="/api/v1")
 app.include_router(tasks.router, prefix="/api/v1")
+app.include_router(models.router, prefix="/api/v1")
+app.include_router(agents.router, prefix="/api/v1")
 
 # Instrument the app with Prometheus (must be done before startup)
 instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)

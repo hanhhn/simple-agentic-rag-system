@@ -178,6 +178,8 @@ class LoggingConfig(BaseSettings):
         default="INFO", description="Log level"
     )
     format: Literal["json", "text"] = Field(default="json", description="Log format")
+    loki_enabled: bool = Field(default=False, description="Enable Loki logging")
+    loki_url: str = Field(default="http://localhost:3100", description="Loki API URL")
     
     model_config = SettingsConfigDict(env_prefix="LOG_", env_file=".env", extra="ignore")
 
@@ -197,6 +199,15 @@ class SecurityConfig(BaseSettings):
     rate_limit_window: int = Field(default=60, ge=1, description="Rate limit window in seconds", alias="RATE_LIMIT_WINDOW")
     
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+
+
+class PrometheusConfig(BaseSettings):
+    """Prometheus metrics configuration."""
+
+    enabled: bool = Field(default=True, description="Enable Prometheus metrics")
+    metrics_path: str = Field(default="/metrics", description="Metrics endpoint path")
+    
+    model_config = SettingsConfigDict(env_prefix="PROMETHEUS_", env_file=".env", extra="ignore")
 
 
 class CeleryConfig(BaseSettings):
@@ -294,6 +305,7 @@ class Config:
         self.logging = LoggingConfig()
         self.security = SecurityConfig()
         self.celery = CeleryConfig()
+        self.prometheus = PrometheusConfig()
 
     @property
     def is_development(self) -> bool:

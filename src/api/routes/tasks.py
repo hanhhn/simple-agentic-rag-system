@@ -10,6 +10,7 @@ from src.core.logging import get_logger
 from src.core.exceptions import ServiceError
 from src.api.models.task import TaskResponse, TaskListResponse, TaskStatus
 from src.tasks.celery_app import celery_app
+from src.core.metrics import task_queued, task_started, task_completed, task_retries, task_failures
 
 
 logger = get_logger(__name__)
@@ -278,5 +279,51 @@ async def list_tasks(
                 "success": False,
                 "error_code": "INTERNAL_ERROR",
                 "message": f"Failed to list tasks: {str(e)}"
+            }
+        )
+
+
+@router.get("/stats")
+async def get_task_stats() -> dict:
+    """
+    Get task queue statistics.
+
+    Returns:
+        Dictionary with task statistics
+    """
+    try:
+        inspect = celery_app.control.inspect()
+
+        # Get active and reserved tasks
+        active = inspect.active() or {}
+        reserved = inspect.reserved() or {}
+
+        # Count by queue/task type
+        stats = {
+            "active": sum(len(tasks) for tasks in active.values()),
+            "reserved": sum(len(tasks) for tasks in reserved.values()),
+            "by_queue": {}
+        }
+
+        # Analyze task types from active tasks
+        for worker_tasks in active.values():
+            for task in worker_tasks:
+                task_name = task.get("name", "unknown")
+                if task_name not in stats["by_queue"]:
+                    stats["by_queue"][task_name] = {"active": 0, "failed": 0}
+                stats["by_queue"][task_name]["active"] += 1
+
+        logger.info("Task stats retrieved", stats=stats)
+
+        return stats
+
+    except Exception as e:
+        logger.error("Failed to get task stats", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error_code": "INTERNAL_ERROR",
+                "message": f"Failed to get task stats: {str(e)}"
             }
         )

@@ -12,6 +12,13 @@ from src.services.vector_store import VectorStore
 from src.services.llm_service import LLMService
 from src.services.storage_manager import StorageManager
 from src.utils.validators import QueryValidator
+from src.core.metrics import (
+    rag_query_latency,
+    rag_query_total,
+    rag_query_errors,
+    vector_search_latency,
+    llm_generation_latency
+)
 
 
 logger = get_logger(__name__)
@@ -88,6 +95,9 @@ class QueryProcessor:
             self.validator.validate_search_params(query, top_k, score_threshold)
             validation_elapsed = time.time() - validation_start
             
+            # Track validation phase
+            rag_query_latency.labels(phase='validation', collection=collection_name).observe(validation_elapsed)
+            
             logger.info(
                 "Starting RAG query processing",
                 query=query[:100],
@@ -102,6 +112,9 @@ class QueryProcessor:
             embedding_start = time.time()
             query_embedding = self.embedding_service.generate_embedding(query)
             embedding_elapsed = time.time() - embedding_start
+            
+            # Track embedding phase
+            rag_query_latency.labels(phase='embedding', collection=collection_name).observe(embedding_elapsed)
             
             logger.info(
                 "Query embedded",
@@ -118,6 +131,10 @@ class QueryProcessor:
                 score_threshold=score_threshold
             )
             search_elapsed = time.time() - search_start
+            
+            # Track search phase
+            rag_query_latency.labels(phase='search', collection=collection_name).observe(search_elapsed)
+            vector_search_latency.labels(collection=collection_name).observe(search_elapsed)
             
             logger.info(
                 "Vector search completed",
@@ -152,6 +169,13 @@ class QueryProcessor:
                 answer = self.llm_service.generate_rag(query, contexts)
                 rag_elapsed = time.time() - rag_start
                 
+                # Track LLM phase
+                rag_query_latency.labels(phase='llm', collection=collection_name).observe(rag_elapsed)
+                llm_generation_latency.labels(
+                    model=self.llm_service.get_model_name(),
+                    type='rag'
+                ).observe(rag_elapsed)
+                
                 result["answer"] = answer
                 result["context_count"] = len(contexts)
                 
@@ -167,6 +191,13 @@ class QueryProcessor:
                 logger.info("Skipping RAG generation", reason="use_rag=False or no results")
             
             total_elapsed = time.time() - start_time
+            
+            # Track total query latency
+            rag_query_latency.labels(phase='total', collection=collection_name).observe(total_elapsed)
+            rag_query_total.labels(
+                collection=collection_name,
+                mode='rag' if use_rag and search_results else 'retrieval_only'
+            ).inc()
             
             logger.info(
                 "Query processed successfully",

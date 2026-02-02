@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { FileText, Database, Search, Activity } from 'lucide-react';
+import { FileText, Database, Search, Activity, Bot, BarChart3 } from 'lucide-react';
 import { HealthStatus } from '@/components/HealthStatus';
 import type { HealthResponse } from '@/lib/api';
 
@@ -11,11 +11,13 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
 
-  const navItems = [
+    const navItems = [
     { path: '/', label: 'Query', icon: Search },
     { path: '/collections', label: 'Collections', icon: Database },
     { path: '/documents', label: 'Documents', icon: FileText },
     { path: '/tasks', label: 'Tasks', icon: Activity },
+    { path: '/agents', label: 'Agents', icon: Bot },
+    { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   ];
 
   return (
