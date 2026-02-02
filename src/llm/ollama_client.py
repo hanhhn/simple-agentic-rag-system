@@ -55,11 +55,18 @@ class OllamaClient(LLMClient):
         )
         
         self.base_url = base_url or config.ollama.url.rstrip('/')
-        self.timeout = timeout or config.ollama.timeout
+        self.timeout_value = timeout or config.ollama.timeout
         
-        # Create HTTP client
-        self._client = httpx.Client(timeout=self.timeout)
-        self._async_client = httpx.AsyncClient(timeout=self.timeout)
+        # Create HTTP client with granular timeout configuration
+        # LLM generation can take a long time, so we set a longer read timeout
+        timeout_config = httpx.Timeout(
+            connect=5.0,  # Connection timeout: 5 seconds
+            read=float(self.timeout_value),  # Read timeout: configured value (default 120s)
+            write=10.0,  # Write timeout: 10 seconds
+            pool=5.0  # Pool acquisition timeout: 5 seconds
+        )
+        self._client = httpx.Client(timeout=timeout_config)
+        self._async_client = httpx.AsyncClient(timeout=timeout_config)
         
         logger.bind(tag=LogTag.LLM.value).info(
             "Ollama client initialized",
@@ -140,11 +147,44 @@ class OllamaClient(LLMClient):
                 f"Ollama returned error: {e.response.status_code}",
                 details={"status": e.response.status_code, "error": str(e)}
             )
+        except httpx.ReadTimeout as e:
+            logger.bind(tag=LogTag.LLM.value).error(
+                "LLM generation read timeout - the model is taking too long to generate response",
+                timeout=self.timeout_value,
+                model=self.model_name,
+                prompt_length=len(prompt),
+                error=str(e)
+            )
+            raise LLMGenerationError(
+                f"LLM generation timed out after {self.timeout_value} seconds. The model may be overloaded or the prompt too complex.",
+                details={
+                    "timeout": self.timeout_value,
+                    "model": self.model_name,
+                    "prompt_length": len(prompt),
+                    "error": "read_timeout"
+                }
+            )
+        except httpx.TimeoutException as e:
+            logger.bind(tag=LogTag.LLM.value).error(
+                "LLM generation timeout occurred",
+                timeout=self.timeout_value,
+                model=self.model_name,
+                error_type=type(e).__name__,
+                error=str(e)
+            )
+            raise LLMGenerationError(
+                f"LLM generation timed out: {str(e)}",
+                details={
+                    "timeout": self.timeout_value,
+                    "model": self.model_name,
+                    "error_type": type(e).__name__
+                }
+            )
         except Exception as e:
-            logger.bind(tag=LogTag.LLM.value).error("Failed to generate response", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to generate response", error=str(e), error_type=type(e).__name__)
             raise LLMGenerationError(
                 f"Failed to generate response: {str(e)}",
-                details={"error": str(e)}
+                details={"error": str(e), "error_type": type(e).__name__}
             )
     
     def generate_stream(self, prompt: str, **kwargs: Dict) -> Iterator[str]:
@@ -217,11 +257,44 @@ class OllamaClient(LLMClient):
                 f"Failed to connect to Ollama server: {str(e)}",
                 details={"url": self.base_url, "error": str(e)}
             )
+        except httpx.ReadTimeout as e:
+            logger.bind(tag=LogTag.LLM.value).error(
+                "Streaming LLM generation read timeout - the model is taking too long to generate response",
+                timeout=self.timeout_value,
+                model=self.model_name,
+                prompt_length=len(prompt),
+                error=str(e)
+            )
+            raise LLMGenerationError(
+                f"Streaming LLM generation timed out after {self.timeout_value} seconds. The model may be overloaded or the prompt too complex.",
+                details={
+                    "timeout": self.timeout_value,
+                    "model": self.model_name,
+                    "prompt_length": len(prompt),
+                    "error": "read_timeout"
+                }
+            )
+        except httpx.TimeoutException as e:
+            logger.bind(tag=LogTag.LLM.value).error(
+                "Streaming LLM generation timeout occurred",
+                timeout=self.timeout_value,
+                model=self.model_name,
+                error_type=type(e).__name__,
+                error=str(e)
+            )
+            raise LLMGenerationError(
+                f"Streaming LLM generation timed out: {str(e)}",
+                details={
+                    "timeout": self.timeout_value,
+                    "model": self.model_name,
+                    "error_type": type(e).__name__
+                }
+            )
         except Exception as e:
-            logger.bind(tag=LogTag.LLM.value).error("Failed to generate streaming response", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to generate streaming response", error=str(e), error_type=type(e).__name__)
             raise LLMGenerationError(
                 f"Failed to generate streaming response: {str(e)}",
-                details={"error": str(e)}
+                details={"error": str(e), "error_type": type(e).__name__}
             )
     
     async def generate_async(self, prompt: str, **kwargs: Dict) -> str:
@@ -282,11 +355,44 @@ class OllamaClient(LLMClient):
                 f"Failed to connect to Ollama server: {str(e)}",
                 details={"url": self.base_url, "error": str(e)}
             )
+        except httpx.ReadTimeout as e:
+            logger.bind(tag=LogTag.LLM.value).error(
+                "Async LLM generation read timeout - the model is taking too long to generate response",
+                timeout=self.timeout_value,
+                model=self.model_name,
+                prompt_length=len(prompt),
+                error=str(e)
+            )
+            raise LLMGenerationError(
+                f"Async LLM generation timed out after {self.timeout_value} seconds. The model may be overloaded or the prompt too complex.",
+                details={
+                    "timeout": self.timeout_value,
+                    "model": self.model_name,
+                    "prompt_length": len(prompt),
+                    "error": "read_timeout"
+                }
+            )
+        except httpx.TimeoutException as e:
+            logger.bind(tag=LogTag.LLM.value).error(
+                "Async LLM generation timeout occurred",
+                timeout=self.timeout_value,
+                model=self.model_name,
+                error_type=type(e).__name__,
+                error=str(e)
+            )
+            raise LLMGenerationError(
+                f"Async LLM generation timed out: {str(e)}",
+                details={
+                    "timeout": self.timeout_value,
+                    "model": self.model_name,
+                    "error_type": type(e).__name__
+                }
+            )
         except Exception as e:
-            logger.bind(tag=LogTag.LLM.value).error("Failed to generate async response", error=str(e))
+            logger.bind(tag=LogTag.LLM.value).error("Failed to generate async response", error=str(e), error_type=type(e).__name__)
             raise LLMGenerationError(
                 f"Failed to generate async response: {str(e)}",
-                details={"error": str(e)}
+                details={"error": str(e), "error_type": type(e).__name__}
             )
     
     def list_models(self) -> list[str]:

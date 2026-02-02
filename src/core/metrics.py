@@ -15,7 +15,7 @@ REGISTRY = CollectorRegistry()
 rag_query_latency = Histogram(
     'rag_query_latency_seconds',
     'RAG query processing latency in seconds',
-    ['phase'],  # phases: validation, embedding, search, llm, total
+    ['phase', 'collection'],  # phases: validation, embedding, search, llm, total
     registry=REGISTRY
 )
 
