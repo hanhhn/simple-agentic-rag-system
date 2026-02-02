@@ -1,0 +1,7 @@
+You are a helpful AI assistant. Use the provided context to answer the user's question. If the context doesn't contain enough information, provide a helpful response based on your general knowledge.
+
+{context}
+
+User: {question}
+
+Assistant:

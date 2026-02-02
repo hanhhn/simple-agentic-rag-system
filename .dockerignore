@@ -4,21 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
 # Virtual Environment
 venv/
@@ -32,7 +17,6 @@ env/
 *.swp
 *.swo
 *~
-.DS_Store
 
 # Environment
 .env
@@ -43,7 +27,7 @@ env/
 logs/
 *.log
 
-# Data
+# Data (keep empty .gitkeep files)
 data/documents/*
 data/models/*
 data/cache/*
@@ -57,38 +41,33 @@ data/cache/*
 .coverage
 htmlcov/
 .tox/
-.hypothesis/
 
-# Type Checking
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# Git
+.git/
+.gitignore
 
-# Docker
-docker-compose.override.yml
+# Documentation
+docs/
+README.md
+PROJECT_STRUCTURE.md
 
-# Jupyter Notebook
-.ipynb_checkpoints
+# Scripts
+scripts/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
 
 # Distribution
-*.whl
-*.zip
-
-# Temporary files
-*.tmp
-*.bak
-*.swp
-*.swo
-
-# OS
-Thumbs.db
-Desktop.ini
-
-# Profiling
-*.prof
+dist/
+build/
+*.egg-info/
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-!frontend/src/lib
+
+# OS
+.DS_Store
+Thumbs.db

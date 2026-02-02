@@ -1,0 +1,51 @@
+name: simple-rag-system
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    # FastAPI and Web Framework
+    - fastapi==0.104.1
+    - uvicorn[standard]==0.24.0
+    - python-multipart==0.0.6
+    
+    # Configuration
+    - pydantic==2.5.0
+    - pydantic-settings==2.1.0
+    - python-dotenv==1.0.0
+    
+    # Vector Database
+    - qdrant-client==1.7.0
+    
+    # Embeddings and ML
+    - numpy<2  # Required: torch and sentence-transformers are compiled against NumPy 1.x
+    - sentence-transformers==5.2.2
+    - torch==2.10.0
+    - transformers==5.0.0
+    
+    # Document Processing
+    - PyPDF2==3.0.1
+    - python-docx==1.1.0
+    - markdown==3.5.0
+    - beautifulsoup4==4.12.2
+    
+    # HTTP Client
+    - httpx==0.25.2
+    
+    # Logging
+    - structlog==23.2.0
+    
+    # Security
+    - python-jose[cryptography]==3.3.0
+    - passlib[bcrypt]==1.7.4
+    
+    # Utilities
+    - aiofiles==23.2.1
+    - tenacity==8.2.3
+    - python-dateutil==2.8.2
+    
+    # Task Queue
+    - celery==5.3.4
+    - redis==5.0.1

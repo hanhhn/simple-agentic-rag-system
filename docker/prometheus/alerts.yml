@@ -1,0 +1,83 @@
+groups:
+  - name: rag_system_alerts
+    interval: 30s
+    rules:
+      # Alert if Qdrant is down
+      - alert: QdrantDown
+        expr: up{job="rag-qdrant"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Qdrant is down"
+          description: "Qdrant vector database has been down for more than 1 minute."
+
+      # Alert if Redis is down
+      - alert: RedisDown
+        expr: up{job="rag-redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute."
+
+      # Alert if backend API is down
+      - alert: BackendAPIDown
+        expr: up{job="rag-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend API is down"
+          description: "Backend API has been down for more than 1 minute."
+
+      # Alert on high error rate in logs (via Loki metric)
+      - alert: HighErrorRate
+        expr: rate(loki_distributed_lines{level="error"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "More than 10 errors per second in the last 5 minutes."
+
+      # Alert if Loki is down
+      - alert: LokiDown
+        expr: up{job="rag-loki"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki is down"
+          description: "Loki log aggregation has been down for more than 1 minute."
+
+      # Alert if Prometheus is down
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus metrics collection has been down for more than 1 minute."
+
+      # Alert on high memory usage
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Container memory usage is above 90% for more than 5 minutes."
+
+      # Alert on high CPU usage
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "Container CPU usage is above 90% for more than 5 minutes."

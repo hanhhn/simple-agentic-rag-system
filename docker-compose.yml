@@ -1,0 +1,294 @@
+version: '3.8'
+
+services:
+  # Frontend Application
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: development
+    container_name: rag-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Backend API Application
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: rag-app
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - APP_DEBUG=True
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_URL=http://ollama:11434
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - qdrant
+      - ollama
+      - redis
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Ollama LLM Runtime
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./docker/ollama-startup.sh:/entrypoint.sh:ro
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_MODEL=llama2
+    # Use startup script that automatically pulls the configured model
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    networks:
+      - rag-network
+    restart: unless-stopped
+    # GPU support (uncomment if you have GPU)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Redis (Task Queue Broker)
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: rag-celery-worker
+    command: celery -A src.tasks.celery_app worker --pool=solo --loglevel=info --queues=documents,embeddings --concurrency=1 --task-events
+    environment:
+      - APP_ENV=development
+      - APP_DEBUG=True
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_URL=http://ollama:11434
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_WORKER_POOL=solo
+      # PyTorch/TensorFlow settings to prevent hanging in Docker
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - TOKENIZERS_PARALLELISM=false
+      - NUMEXPR_MAX_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - PYTHONDONTWRITEBYTECODE=1
+      # Disable PyTorch multi-threading completely (fix for ARM64 Docker)
+      - TORCH_DISABLE_CUDA_SUPPORT_CHECK=1
+      - TORCH_ENABLE_MPS_FALLBACK=0
+      - KMP_DUPLICATE_LIB_OK=TRUE
+      - MKL_DEBUG_CPU_TYPE=5
+      # Aggressive threading disable for ARM64 compatibility
+      - NUMBA_DISABLE_JIT=1
+      - PYTORCH_ENABLE_MPS_FALLBACK=0
+      - ATEN_THREADING_IMPLEMENTATION=0
+      - TORCH_ALLOW_TF32_CUBLAS_OVERRIDE=0
+      # Force single-threaded execution
+      - OMP_PLACES=cores
+      - OMP_PROC_BIND=TRUE
+      - OMP_WAIT_POLICY=ACTIVE
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - qdrant
+      - ollama
+      - redis
+    networks:
+      - rag-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Celery Exporter - Metrics for Celery
+  celery-exporter:
+    image: danihodovic/celery-exporter:latest
+    container_name: rag-celery-exporter
+    platform: linux/amd64
+    ports:
+      - "9091:9091"
+    command: ["--broker-url=redis://redis:6379/0", "--port=9091"]
+    depends_on:
+      - redis
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Loki - Log Aggregation System
+  loki:
+    image: grafana/loki:latest
+    container_name: rag-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./docker/loki/loki-config.yml:/etc/loki/local-config.yml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yml
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Promtail - Log Collection Agent
+  promtail:
+    image: grafana/promtail:latest
+    container_name: rag-promtail
+    volumes:
+      - ./docker/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./logs:/var/log/rag-app:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_started
+    networks:
+      - rag-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rag-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - rag-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Grafana - Visualization and Log Search
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rag-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_LOG_MODE=console
+      - GF_LOG_LEVEL=info
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - rag-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  rag-network:
+    driver: bridge
+
+volumes:
+  qdrant_data:
+    driver: local
+  ollama_data:
+    driver: local
+  redis_data:
+    driver: local
+  loki_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
